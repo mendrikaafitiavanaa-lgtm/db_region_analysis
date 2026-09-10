@@ -1,0 +1,33 @@
+# Environnement et Secrets (CRITIQUE : JAMAIS DANS GIT)
+.env
+.env.*
+!.env.example
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+ENV/
+
+# Cache et Checkpoints locaux
+.checkpoint/
+logs/
+*.log
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Données locales
+*.db
+*.sqlite
+*.csv
