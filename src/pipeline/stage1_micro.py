@@ -23,7 +23,7 @@ from src.utils.logger import get_logger
 from src.llm import token_budget
 
 
-def run_stage_1(run_id: Optional[str] = None) -> Dict:
+def run_stage_1(run_id: Optional[str] = None, force: bool = False) -> Dict:
     logger = get_logger()
     settings.validate()
     target_writer.ensure_all_indexes()
@@ -31,13 +31,19 @@ def run_stage_1(run_id: Optional[str] = None) -> Dict:
     run_id = run_id or f"run_l1_{datetime.now().strftime('%Y-%m-%d_%Hh%M')}"
     logger.info(f"=== [STAGE 1] Démarrage du traitement L1 ({run_id}) ===")
 
-    # 1. Identifier les documents déjà traités en L1
-    already_done_ids = source_reader.get_already_processed_ids(
-        collection_name=settings.MONGO_L1_COLLECTION,
-        id_field="document_ids"
-    )
+    # 1. Identifier les documents déjà traités en L1 (ayant bien cause et preuve)
+    if force:
+        already_done_ids = set()
+        logger.info("[STAGE 1] Mode FORCE activé : ré-analyse de l'intégralité des sources.")
+    else:
+        already_done_ids = source_reader.get_already_processed_ids(
+            collection_name=settings.MONGO_SYNTHESES_COLLECTION,
+            id_field="document_ids",
+            stage_type="synthese_l1",
+            require_fields=["cause", "preuve"],
+        )
 
-    # 2. Charger les documents sources non traités
+    # 2. Charger les documents sources non traités ou nécessitant mise à jour
     all_pending_docs = source_reader.read_all_pending_sources(
         exclude_ids=already_done_ids,
         max_docs=settings.MAX_DOCS_PER_RUN
@@ -45,12 +51,12 @@ def run_stage_1(run_id: Optional[str] = None) -> Dict:
 
     total_loaded = len(all_pending_docs)
     logger.info(
-        f"[STAGE 1] Documents sources déjà en L1: {len(already_done_ids)}. "
-        f"Restant à traiter: {total_loaded}."
+        f"[STAGE 1] Documents sources déjà à jour en L1 (avec cause et preuve): {len(already_done_ids)}. "
+        f"Restant à traiter/mettre à jour: {total_loaded}."
     )
 
     if total_loaded == 0:
-        logger.info("[STAGE 1] Aucun nouveau document brut à traiter. L1 est à jour.")
+        logger.info("[STAGE 1] Toutes les micro-synthèses L1 sont à jour (avec cause et preuve).")
         return {"statut": "termine", "total_lots": 0, "succes": 0, "erreurs": 0}
 
     # 3. Regroupement thématique FlashText par domaine strict

@@ -23,7 +23,7 @@ from src.utils.logger import get_logger
 from src.llm import token_budget
 
 
-def run_stage_2(run_id: Optional[str] = None) -> Dict:
+def run_stage_2(run_id: Optional[str] = None, force: bool = False) -> Dict:
     logger = get_logger()
     settings.validate()
     target_writer.ensure_all_indexes()
@@ -31,28 +31,35 @@ def run_stage_2(run_id: Optional[str] = None) -> Dict:
     run_id = run_id or f"run_l2_{datetime.now().strftime('%Y-%m-%d_%Hh%M')}"
     logger.info(f"=== [STAGE 2] Démarrage du traitement L2 ({run_id}) ===")
 
-    # 1. Identifier les synthèses L1 déjà consolidées en L2
-    already_done_l1_ids = source_reader.get_already_processed_ids(
-        collection_name=settings.MONGO_L2_COLLECTION,
-        id_field="l1_synthese_ids"
-    )
+    # 1. Identifier les synthèses L1 déjà consolidées en L2 (avec cause et preuve)
+    if force:
+        already_done_l1_ids = set()
+        logger.info("[STAGE 2] Mode FORCE activé : ré-analyse de l'intégralité des synthèses L1.")
+    else:
+        already_done_l1_ids = source_reader.get_already_processed_ids(
+            collection_name=settings.MONGO_SYNTHESES_COLLECTION,
+            id_field="l1_synthese_ids",
+            stage_type="synthese_l2",
+            require_fields=["cause", "preuve"],
+        )
 
     # 2. Charger toutes les synthèses L1
     all_l1_docs = source_reader.read_stage_documents(
-        collection_name=settings.MONGO_L1_COLLECTION
+        collection_name=settings.MONGO_SYNTHESES_COLLECTION,
+        stage_type="synthese_l1",
     )
 
-    # Filtrer celles non traitées
+    # Filtrer celles non traitées ou nécessitant consolidation
     pending_l1_docs = [doc for doc in all_l1_docs if str(doc.get("_id")) not in already_done_l1_ids]
 
     logger.info(
         f"[STAGE 2] Total L1 existants: {len(all_l1_docs)}. "
-        f"Déjà consolidés en L2: {len(already_done_l1_ids)}. "
-        f"Restant à traiter: {len(pending_l1_docs)}."
+        f"Déjà consolidés en L2 (avec cause et preuve): {len(already_done_l1_ids)}. "
+        f"Restant à traiter/mettre à jour: {len(pending_l1_docs)}."
     )
 
     if not pending_l1_docs:
-        logger.info("[STAGE 2] Aucune nouvelle synthèse L1 à traiter. L2 est à jour.")
+        logger.info("[STAGE 2] Toutes les méso-synthèses L2 sont à jour (avec cause et preuve).")
         return {"statut": "termine", "total_lots": 0, "succes": 0, "erreurs": 0}
 
     # 3. Regroupement par domaine

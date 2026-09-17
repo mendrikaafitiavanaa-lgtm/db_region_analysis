@@ -39,6 +39,11 @@ def parse_args():
         default="",
         help="Mois cible au format YYYY-MM (ex: 2026-08). Écrase la valeur du .env si fourni.",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force la ré-analyse et la mise à jour de tous les documents même s'ils sont déjà présents.",
+    )
     return parser.parse_args()
 
 
@@ -51,7 +56,7 @@ def main():
         logger.info(f"Filtre temporel forcé : {settings.MOIS_CIBLE}")
 
     try:
-        run_pipeline(stage=args.stage)
+        run_pipeline(stage=args.stage, force=args.force)
     except KeyboardInterrupt:
         logger.warning("\nArrêt manuel demandé par l'utilisateur (Ctrl+C).")
         sys.exit(0)

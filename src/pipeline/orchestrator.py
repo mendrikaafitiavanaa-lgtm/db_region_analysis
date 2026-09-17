@@ -17,13 +17,14 @@ from src.pipeline.stage4_global import run_stage_4
 from src.pipeline.stage5_finale import run_stage_5
 
 
-def run_pipeline(stage: str = "all", run_id: Optional[str] = None) -> Dict:
+def run_pipeline(stage: str = "all", run_id: Optional[str] = None, force: bool = False) -> Dict:
     """
     Exécute le pipeline pyramidal d'analyse.
     
     Args:
         stage: '1', '2', '3', '4', '5' ou 'all'
         run_id: Identifiant unique du run (généré si None)
+        force: Force la ré-analyse même si les documents sont déjà indexés
     """
     logger = get_logger()
     settings.validate()
@@ -32,8 +33,8 @@ def run_pipeline(stage: str = "all", run_id: Optional[str] = None) -> Dict:
     start_global = time.time()
     
     logger.info("=" * 60)
-    logger.info(f"🚀 DÉMARRAGE DU PIPELINE PYRAMIDAL CORSE [{run_id}]")
-    logger.info(f"   Mode d'exécution : Stage '{stage.upper()}'")
+    logger.info(f" DÉMARRAGE DU PIPELINE PYRAMIDAL CORSE [{run_id}]")
+    logger.info(f"   Mode d'exécution : Stage '{stage.upper()}' (Force={force})")
     logger.info(f"   Provider LLM : {settings.LLM_PROVIDER.upper()} (Ordre: {settings.LLM_PROVIDER_ORDER})")
     logger.info(f"   Mois cible : {settings.MOIS_CIBLE or 'Global / Tous mois'}")
     logger.info("=" * 60)
@@ -49,37 +50,37 @@ def run_pipeline(stage: str = "all", run_id: Optional[str] = None) -> Dict:
         # --- ÉTAPE 1 : Documents Bruts -> Micro-synthèses L1 ---
         if stage in ("1", "all"):
             logger.info("\n▶ [STAGE 1] Micro-synthèses par lots thématiques (L0 -> L1)")
-            res_s1 = run_stage_1(run_id=run_id)
+            res_s1 = run_stage_1(run_id=run_id, force=force)
             results["stages"]["stage_1"] = res_s1
-            logger.info(f"✔ Stage 1 terminé : {res_s1.get('succes', 0)} micro-synthèses L1 générées.\n")
+            logger.info(f" Stage 1 terminé : {res_s1.get('succes', 0)} micro-synthèses L1 générées.\n")
         
         # --- ÉTAPE 2 : Micro-synthèses L1 -> Méso-synthèses L2 ---
         if stage in ("2", "all"):
-            logger.info("\n▶ [STAGE 2] Consolidation méso-territoriale par domaine (L1 -> L2)")
-            res_s2 = run_stage_2(run_id=run_id)
+            logger.info("\n[STAGE 2] Consolidation méso-territoriale par domaine (L1 -> L2)")
+            res_s2 = run_stage_2(run_id=run_id, force=force)
             results["stages"]["stage_2"] = res_s2
-            logger.info(f"✔ Stage 2 terminé : {res_s2.get('succes', 0)} méso-synthèses L2 générées.\n")
+            logger.info(f" Stage 2 terminé : {res_s2.get('succes', 0)} méso-synthèses L2 générées.\n")
         
         # --- ÉTAPE 3 : Méso-synthèses L2 -> Bilans de Domaine ---
         if stage in ("3", "all"):
-            logger.info("\n▶ [STAGE 3] Grands Bilans Mensuels par Domaine (L2 -> L3)")
+            logger.info("\n[STAGE 3] Grands Bilans Mensuels par Domaine (L2 -> L3)")
             res_s3 = run_stage_3(run_id=run_id)
             results["stages"]["stage_3"] = res_s3
-            logger.info(f"✔ Stage 3 terminé : {res_s3.get('succes', 0)} bilans de domaine rédigés.\n")
+            logger.info(f" Stage 3 terminé : {res_s3.get('succes', 0)} bilans de domaine rédigés.\n")
         
         # --- ÉTAPE 4 : Bilans de Domaine -> Rapport Global Territorial ---
         if stage in ("4", "all"):
             logger.info("\n▶ [STAGE 4] Rapport Stratégique Territorial Global (L3 -> L4 - Sommet)")
             res_s4 = run_stage_4(run_id=run_id)
             results["stages"]["stage_4"] = res_s4
-            logger.info(f"✔ Stage 4 terminé : {res_s4.get('titre', 'Rapport Global')}\n")
+            logger.info(f" Stage 4 terminé : {res_s4.get('titre', 'Rapport Global')}\n")
         
         # --- ÉTAPE 5 : Rapport Global -> Synthèse Exécutive Problème N°1 ---
         if stage in ("5", "all"):
             logger.info("\n▶ [STAGE 5] Synthèse Exécutive Finale N°1 (L4 -> L5 - Sommet Ultime)")
             res_s5 = run_stage_5(run_id=run_id)
             results["stages"]["stage_5"] = res_s5
-            logger.info(f"✔ Stage 5 terminé : Domaine N°1 [{res_s5.get('domaine_prioritaire', '').upper()}] - {res_s5.get('probleme_persistant')}\n")
+            logger.info(f" Stage 5 terminé : Domaine N°1 [{res_s5.get('domaine_prioritaire', '').upper()}] - {res_s5.get('probleme_persistant')}\n")
         
         results["statut"] = "succes"
 
@@ -94,7 +95,7 @@ def run_pipeline(stage: str = "all", run_id: Optional[str] = None) -> Dict:
         results["duree_totale_secondes"] = round(total_duree, 2)
         
         logger.info("=" * 60)
-        logger.info(f"🏁 FIN D'EXÉCUTION DU PIPELINE [{run_id}] en {total_duree:.1f}s")
+        logger.info(f" FIN D'EXÉCUTION DU PIPELINE [{run_id}] en {total_duree:.1f}s")
         logger.info(f"   Statut global : {results['statut'].upper()}")
         logger.info("=" * 60)
         

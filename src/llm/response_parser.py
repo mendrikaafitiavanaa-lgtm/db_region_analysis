@@ -49,7 +49,15 @@ def parse_stage1_response(raw_response: str) -> dict:
         raise ParsingError(f"Format JSON invalide (Stage 1), attendu dict, reçu: {type(data)}")
 
     data["gravite"] = _normalize_gravite(data.get("gravite", "modere"))
-    for field in ["resume_court", "problematique_identifiee", "consequence_potentielle", "besoins_reels_detectes", "solutions_recommandees"]:
+    for field in [
+        "resume_court",
+        "problematique_identifiee",
+        "cause",
+        "preuve",
+        "consequence_potentielle",
+        "besoins_reels_detectes",
+        "solutions_recommandees",
+    ]:
         if not data.get(field):
             data[field] = f"Information non consolidée pour {field}"
 
@@ -70,7 +78,14 @@ def parse_stage2_response(raw_response: str) -> dict:
         raise ParsingError(f"Format JSON invalide (Stage 2), attendu dict, reçu: {type(data)}")
 
     data["gravite"] = _normalize_gravite(data.get("gravite", "modere"))
-    for field in ["resume_consolide", "tendance_majeure", "impacts_territoriaux", "actions_prioritaires"]:
+    for field in [
+        "resume_consolide",
+        "tendance_majeure",
+        "cause",
+        "preuve",
+        "impacts_territoriaux",
+        "actions_prioritaires",
+    ]:
         if not data.get(field):
             data[field] = f"Information non consolidée pour {field}"
 
@@ -92,6 +107,8 @@ def parse_stage3_response(raw_response: str, fallback_domain: str = "") -> dict:
 
     data["gravite_globale"] = _normalize_gravite(data.get("gravite_globale", "modere"))
     data["bilan_executif"] = data.get("bilan_executif") or "Bilan non consolidé"
+    data["cause"] = data.get("cause") or "Cause sectorielle non consolidée"
+    data["preuve"] = data.get("preuve") or "Preuves et indicateurs en attente"
     
     for list_field in ["points_chauds_geographiques", "principaux_dysfonctionnements", "preconisations_strategiques"]:
         val = data.get(list_field)
@@ -124,6 +141,8 @@ def parse_stage4_response(raw_response: str) -> dict:
 
     data["titre"] = data.get("titre") or "Rapport Stratégique Territorial Corse"
     data["synthese_transversale"] = data.get("synthese_transversale") or "Synthèse transversale non disponible"
+    data["cause"] = data.get("cause") or "Causes transversales en attente d'analyse"
+    data["preuve"] = data.get("preuve") or "Preuves et indicateurs globaux non disponibles"
     
     if not isinstance(data.get("faits_marquants_du_mois"), list):
         data["faits_marquants_du_mois"] = []
@@ -158,6 +177,8 @@ def parse_stage5_response(raw_response: str) -> dict:
 
     data["domaine_prioritaire_identifie"] = str(data.get("domaine_prioritaire_identifie") or "general_territoire").lower().strip()
     data["probleme_majeur_persistant"] = data.get("probleme_majeur_persistant") or "Problématique territoriale majeure non spécifiée"
+    data["cause"] = data.get("cause") or "Cause racine en attente de précision"
+    data["preuve"] = data.get("preuve") or "Éléments de preuve en cours de rassemblement"
     data["justification_priorite_absolue"] = data.get("justification_priorite_absolue") or "Justification non consolidée"
     data["impacts_et_risques_inaction"] = data.get("impacts_et_risques_inaction") or "Risques en cours d'évaluation"
     data["verdict_executif"] = data.get("verdict_executif") or "Verdict exécutif en attente"

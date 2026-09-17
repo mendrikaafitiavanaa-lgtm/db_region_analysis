@@ -30,7 +30,8 @@ def run_stage_4(run_id: Optional[str] = None) -> Dict:
 
     # 1. Charger tous les bilans de domaine
     domain_bilans = source_reader.read_stage_documents(
-        collection_name=settings.MONGO_DOMAINES_COLLECTION
+        collection_name=settings.MONGO_DOMAINES_COLLECTION,
+        stage_type="bilan_domaine",
     )
 
     if not domain_bilans:
@@ -40,8 +41,8 @@ def run_stage_4(run_id: Optional[str] = None) -> Dict:
     logger.info(f"[STAGE 4] {len(domain_bilans)} bilans de domaine chargés pour le rapport global.")
 
     start_time = time.time()
-    mois_label = settings.MOIS_CIBLE or "Mois d'analyse"
-    region_label = "Corse"
+    mois_label = settings.MOIS_CIBLE or "2026-08"
+    region_label = settings.REGION or "region_corse_sud"
 
     try:
         messages = build_stage4_messages(domain_bilans, mois=mois_label, region=region_label)

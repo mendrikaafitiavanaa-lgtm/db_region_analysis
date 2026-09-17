@@ -1,6 +1,9 @@
 """
 Module de lecture des collections MongoDB avec curseurs optimisés.
-Supporte la lecture pour le Stage 1 (documents bruts) et les Stages 2, 3, 4 (synthèses).
+Supporte l'architecture à 3 collections cibles :
+1. Syntheses (L1 + L2)
+2. Domaines (L3 + L4)
+3. Finale (L5)
 """
 import calendar
 from datetime import datetime, timezone
@@ -11,9 +14,9 @@ from pymongo.collection import Collection
 from config import settings
 from src.db.mongo_client import (
     get_source_collection,
-    get_l1_collection,
-    get_l2_collection,
+    get_syntheses_collection,
     get_domaines_collection,
+    get_finale_collection,
     get_collection,
 )
 
@@ -45,8 +48,14 @@ def _mois_bounds(mois_cible: str):
 def get_base_date_filter() -> dict:
     filt = {}
     if settings.MOIS_CIBLE:
-        start, end = _mois_bounds(settings.MOIS_CIBLE)
-        filt["publication_date"] = {"$gte": start, "$lte": end}
+        try:
+            start, end = _mois_bounds(settings.MOIS_CIBLE)
+            filt["$or"] = [
+                {"publication_date": {"$gte": start, "$lte": end}},
+                {"publication_date": {"$regex": f"^{settings.MOIS_CIBLE}"}},
+            ]
+        except Exception:
+            filt["publication_date"] = {"$regex": f"^{settings.MOIS_CIBLE}"}
     return filt
 
 
@@ -77,18 +86,50 @@ def read_all_pending_sources(
 
 def read_stage_documents(
     collection_name: str,
-    query: Optional[dict] = None
+    query: Optional[dict] = None,
+    stage_type: Optional[str] = None,
 ) -> List[dict]:
-    """Lit tous les documents d'une collection de stage donnée."""
+    """Lit les documents d'une collection avec filtrage optionnel par stage_type."""
     coll = get_collection(collection_name)
-    filt = query or {}
-    # Exclure les logs d'exécution éventuels
-    filt["type"] = {"$ne": "log_stage"}
+    filt = dict(query) if query else {}
+    if stage_type:
+        filt["type"] = stage_type
+    elif "type" not in filt:
+        filt["type"] = {"$ne": "log_stage"}
     return list(coll.find(filt).sort("_id", 1))
 
 
-def get_already_processed_ids(collection_name: str, id_field: str = "document_ids") -> Set[str]:
-    """Récupère tous les IDs déjà traités dans la collection cible pour éviter les doublons."""
+def get_already_processed_ids(
+    collection_name: str,
+    id_field: str = "document_ids",
+    stage_type: Optional[str] = None,
+    require_fields: Optional[List[str]] = None,
+) -> Set[str]:
+    """Récupère tous les IDs déjà traités et à jour dans la collection cible pour éviter les doublons."""
     coll = get_collection(collection_name)
-    processed = coll.distinct(id_field, {"type": {"$ne": "log_stage"}})
+    filt = {}
+    if stage_type:
+        filt["type"] = stage_type
+    else:
+        filt["type"] = {"$ne": "log_stage"}
+    
+    # Si des champs obligatoires sont requis (par ex: cause, preuve), ne considérer comme traités
+    # que les documents qui les ont renseignés avec un contenu valide (non vide / non générique).
+    if require_fields:
+        for f in require_fields:
+            filt[f] = {
+                "$exists": True,
+                "$ne": "",
+                "$nin": [
+                    f"Information non consolidée pour {f}",
+                    "Cause racine en attente de précision",
+                    "Cause sectorielle non consolidée",
+                    "Causes transversales en attente d'analyse",
+                    "Éléments de preuve en cours de rassemblement",
+                    "Preuves et indicateurs en attente",
+                    "Preuves et indicateurs globaux non disponibles",
+                ],
+            }
+
+    processed = coll.distinct(id_field, filt)
     return set(str(doc_id) for doc_id in processed if doc_id)

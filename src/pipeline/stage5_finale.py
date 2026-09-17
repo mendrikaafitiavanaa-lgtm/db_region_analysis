@@ -7,7 +7,7 @@ Flux :
    - Détection de l'unique problématique / domaine N°1 le plus persistant et récurrent du mois.
    - Justification de son urgence absolue.
    - Plan d'action prioritaire et solutions concrètes recommandées.
-3. Sauvegarde dans la collection db_france_rapport_mensuel_finale.
+3. Sauvegarde dans la collection finale mensuelle (settings.MONGO_FINALE_COLLECTION).
 """
 import time
 from datetime import datetime
@@ -33,7 +33,8 @@ def run_stage_5(run_id: Optional[str] = None) -> Dict:
 
     # 1. Charger le rapport global (Stage 4)
     rapports_l4 = source_reader.read_stage_documents(
-        collection_name=settings.MONGO_GLOBAL_COLLECTION
+        collection_name=settings.MONGO_DOMAINES_COLLECTION,
+        stage_type="rapport_global_mensuel",
     )
 
     if not rapports_l4:
@@ -45,12 +46,13 @@ def run_stage_5(run_id: Optional[str] = None) -> Dict:
 
     # 2. Charger les bilans de domaine (Stage 3) en complément
     domain_bilans = source_reader.read_stage_documents(
-        collection_name=settings.MONGO_DOMAINES_COLLECTION
+        collection_name=settings.MONGO_DOMAINES_COLLECTION,
+        stage_type="bilan_domaine",
     )
 
     start_time = time.time()
-    mois_label = settings.MOIS_CIBLE or rapport_global.get("mois_cible") or "Mois d'analyse"
-    region_label = rapport_global.get("region") or "Corse"
+    mois_label = settings.MOIS_CIBLE or rapport_global.get("mois_cible") or "2026-08"
+    region_label = settings.REGION or rapport_global.get("region") or "region_corse_sud"
 
     try:
         messages = build_stage5_messages(

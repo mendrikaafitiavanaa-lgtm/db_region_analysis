@@ -10,6 +10,7 @@ Supporte :
 import logging
 from typing import List, Tuple
 from config import settings
+from src.llm import cooldown_manager
 from src.llm.rate_limiter import global_rate_limiter
 from src.llm import token_budget
 from src.llm import openrouter_client
@@ -22,12 +23,8 @@ class LLMError(Exception):
     pass
 
 
-# Fournisseur actuellement actif
-_CURRENT_PROVIDER_INDEX = 0
-
-
 def _get_provider_pipeline() -> List[Tuple[str, callable]]:
-    """Retourne la liste ordonnée des fournisseurs à essayer."""
+    """Retourne la liste ordonnée des fournisseurs à essayer selon la configuration."""
     pipeline = []
     order = settings.LLM_PROVIDER_ORDER if settings.LLM_PROVIDER == "auto" else [settings.LLM_PROVIDER]
 
@@ -46,8 +43,6 @@ def _get_provider_pipeline() -> List[Tuple[str, callable]]:
 
 
 def call_llm(messages: list) -> str:
-    global _CURRENT_PROVIDER_INDEX
-
     # 1. Estimation tokens prompt
     prompt_tokens = token_budget.estimate_tokens_for_messages(messages)
 
@@ -70,21 +65,31 @@ def call_llm(messages: list) -> str:
         pass
 
     pipeline = _get_provider_pipeline()
-    num_providers = len(pipeline)
+
+    # Filtrer les fournisseurs disponibles selon le statut de cooldown
+    available_providers = [
+        (name, fn) for name, fn in pipeline
+        if cooldown_manager.is_provider_available(name)
+    ]
+
+    # Si tous les fournisseurs sont actuellement bloqués par un cooldown actif
+    if not available_providers:
+        status_details = []
+        for name, _ in pipeline:
+            rem = cooldown_manager.get_remaining_cooldown_seconds(name)
+            rem_str = cooldown_manager.format_remaining_time(rem)
+            status_details.append(f"{name.upper()} (cooldown restant: {rem_str})")
+        details_str = ", ".join(status_details)
+        raise LLMError(
+            f"Tous les fournisseurs LLM sont actuellement bloqués par un cooldown. [{details_str}]. "
+            f"Attendez la fin du cooldown ou réinitialisez le statut si vous avez changé de clé API."
+        )
+
     last_exc = None
 
-    # Essayer à partir du fournisseur actuellement actif
-    for i in range(num_providers):
-        idx = (_CURRENT_PROVIDER_INDEX + i) % num_providers
-        provider_name, call_fn = pipeline[idx]
-
+    for provider_name, call_fn in available_providers:
         try:
             raw = call_fn(messages)
-
-            # Si on a réussi avec un nouveau fournisseur après bascule, on le mémorise
-            if idx != _CURRENT_PROVIDER_INDEX:
-                logger.info(f"[FAILOVER] Fournisseur actif basculé vers: {provider_name.upper()}")
-                _CURRENT_PROVIDER_INDEX = idx
 
             # Enregistrer consommation tokens
             try:
@@ -96,24 +101,31 @@ def call_llm(messages: list) -> str:
             return raw
 
         except (google_client.GoogleQuotaError, openrouter_client.OpenRouterQuotaError) as quota_err:
+            # Active un cooldown uniquement si la configuration le permet
+            cooldown_manager.mark_cooldown(
+                provider_name=provider_name,
+                reason=str(quota_err),
+                duration_hours=settings.LLM_COOLDOWN_HOURS,
+            )
             logger.warning(
-                f"[FAILOVER] Quota/Limite atteinte sur '{provider_name.upper()}': {quota_err}. "
-                f"Tentative de basculement vers un autre fournisseur..."
+                f"⚠️ [FAILOVER] Quota/Limite 429 atteinte sur '{provider_name.upper()}'. "
+                f"Durée active du cooldown: {settings.LLM_COOLDOWN_HOURS}h. Basculement automatique..."
             )
             last_exc = quota_err
             continue
+
         except Exception as exc:
-            # Si erreur générique LLM, tenter aussi le fallback si mode auto
-            if settings.LLM_PROVIDER == "auto" and num_providers > 1:
+            # Si erreur générique LLM, tenter aussi le fallback si d'autres fournisseurs disponibles
+            if settings.LLM_PROVIDER == "auto" and len(available_providers) > 1:
                 logger.warning(
-                    f"[FAILOVER] Erreur sur '{provider_name.upper()}': {exc}. "
-                    f"Tentative de basculement vers fournisseur de secours..."
+                    f"⚠️ [FAILOVER] Erreur sur '{provider_name.upper()}': {exc}. "
+                    f"Tentative de basculement vers fournisseur suivant..."
                 )
                 last_exc = exc
                 continue
             raise LLMError(f"[{provider_name}] {exc}") from exc
 
-    raise LLMError(f"Tous les fournisseurs LLM ont échoué. Dernière erreur: {last_exc}")
+    raise LLMError(f"Tous les fournisseurs LLM disponibles ont échoué. Dernière erreur: {last_exc}")
 
 
 def get_error_class():

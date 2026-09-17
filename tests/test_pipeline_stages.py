@@ -7,6 +7,7 @@ from src.pipeline.orchestrator import run_pipeline
 
 
 class TestPipelineOrchestrator(unittest.TestCase):
+    @patch("time.sleep")
     @patch("src.db.target_writer.ensure_all_indexes")
     @patch("src.db.source_reader.get_already_processed_ids")
     @patch("src.db.source_reader.read_all_pending_sources")
@@ -16,10 +17,18 @@ class TestPipelineOrchestrator(unittest.TestCase):
     @patch("src.db.target_writer.save_bilan_domaine")
     @patch("src.db.target_writer.save_rapport_global")
     @patch("src.db.target_writer.save_rapport_mensuel_finale")
-    @patch("src.llm.client.call_llm")
+    @patch("src.pipeline.stage1_micro.call_llm")
+    @patch("src.pipeline.stage2_meso.call_llm")
+    @patch("src.pipeline.stage3_domaines.call_llm")
+    @patch("src.pipeline.stage4_global.call_llm")
+    @patch("src.pipeline.stage5_finale.call_llm")
     def test_run_full_pipeline_mocked(
         self,
-        mock_call_llm,
+        mock_llm_s5,
+        mock_llm_s4,
+        mock_llm_s3,
+        mock_llm_s2,
+        mock_llm_s1,
         mock_save_finale,
         mock_save_global,
         mock_save_bilan,
@@ -29,6 +38,7 @@ class TestPipelineOrchestrator(unittest.TestCase):
         mock_read_sources,
         mock_get_processed,
         mock_ensure_indexes,
+        mock_sleep,
     ):
         # Configuration des mocks
         mock_get_processed.return_value = set()
@@ -46,48 +56,114 @@ class TestPipelineOrchestrator(unittest.TestCase):
         mock_read_stage.side_effect = [
             # Lecture L1 pour Stage 2
             [
-                {"_id": "l1_1", "domaine_principal": "sante_secours", "document_ids": [f"sante_{i}" for i in range(8)], "resume_court": "Synthèse santé", "problematique_identifiee": "Désert médical"},
-                {"_id": "l1_2", "domaine_principal": "transport_mobilite", "document_ids": [f"trans_{i}" for i in range(8)], "resume_court": "Synthèse transport", "problematique_identifiee": "Bouchons"},
+                {
+                    "_id": "l1_1",
+                    "domaine_principal": "sante_secours",
+                    "document_ids": [f"sante_{i}" for i in range(8)],
+                    "resume_court": "Synthèse santé",
+                    "problematique_identifiee": "Désert médical",
+                    "cause": "Manque de médecins",
+                    "preuve": "3 cabinets fermés",
+                },
+                {
+                    "_id": "l1_2",
+                    "domaine_principal": "transport_mobilite",
+                    "document_ids": [f"trans_{i}" for i in range(8)],
+                    "resume_court": "Synthèse transport",
+                    "problematique_identifiee": "Bouchons",
+                    "cause": "Travaux non coordonnés",
+                    "preuve": "2h d'attente sur RN193",
+                },
             ],
             # Lecture L2 pour Stage 3
             [
-                {"domaine_principal": "sante_secours", "document_ids_sources": [f"sante_{i}" for i in range(8)], "resume_consolide": "Meso santé", "gravite": "grave"},
-                {"domaine_principal": "transport_mobilite", "document_ids_sources": [f"trans_{i}" for i in range(8)], "resume_consolide": "Meso transport", "gravite": "modere"},
+                {
+                    "domaine_principal": "sante_secours",
+                    "document_ids_sources": [f"sante_{i}" for i in range(8)],
+                    "resume_consolide": "Meso santé",
+                    "gravite": "grave",
+                    "cause": "Déficit d'attractivité territoriale",
+                    "preuve": "Fermeture nocturne des urgences",
+                },
+                {
+                    "domaine_principal": "transport_mobilite",
+                    "document_ids_sources": [f"trans_{i}" for i in range(8)],
+                    "resume_consolide": "Meso transport",
+                    "gravite": "modere",
+                    "cause": "Saturation du réseau routier",
+                    "preuve": "Ralentissements quotidiens",
+                },
             ],
             # Lecture Bilans pour Stage 4
             [
-                {"domaine": "sante_secours", "gravite_globale": "grave", "bilan_executif": "Santé en tension", "total_documents_sources_couverts": 8},
-                {"domaine": "transport_mobilite", "gravite_globale": "modere", "bilan_executif": "Transports fluides", "total_documents_sources_couverts": 8},
+                {
+                    "domaine": "sante_secours",
+                    "gravite_globale": "grave",
+                    "bilan_executif": "Santé en tension",
+                    "cause": "Pénurie médicale globale",
+                    "preuve": "40% postes vacants",
+                    "total_documents_sources_couverts": 8,
+                },
+                {
+                    "domaine": "transport_mobilite",
+                    "gravite_globale": "modere",
+                    "bilan_executif": "Transports sous tension",
+                    "cause": "Axes côtiers saturés",
+                    "preuve": "Bouchons records",
+                    "total_documents_sources_couverts": 8,
+                },
             ],
             # Lecture Global (Stage 4) pour Stage 5
             [
-                {"titre": "Rapport Stratégique Territorial", "statut_general": "critique", "total_documents_sources_couverts": 16, "faits_marquants_du_mois": ["Pénurie médicale"], "synthese_transversale": "Tension"},
+                {
+                    "titre": "Rapport Stratégique Territorial",
+                    "statut_general": "critique",
+                    "cause": "Tension infrastructurelle et médicale",
+                    "preuve": "Indicateurs au rouge sur toute l'île",
+                    "total_documents_sources_couverts": 16,
+                    "faits_marquants_du_mois": ["Pénurie médicale"],
+                    "synthese_transversale": "Tension",
+                },
             ],
             # Lecture Bilans (Stage 3) pour Stage 5
             [
-                {"domaine": "sante_secours", "gravite_globale": "grave", "bilan_executif": "Santé en tension", "principaux_dysfonctionnements": ["Déserts médicaux"]},
-                {"domaine": "transport_mobilite", "gravite_globale": "modere", "bilan_executif": "Transports fluides", "principaux_dysfonctionnements": ["Voirie"]},
+                {
+                    "domaine": "sante_secours",
+                    "gravite_globale": "grave",
+                    "bilan_executif": "Santé en tension",
+                    "cause": "Pénurie médicale",
+                    "preuve": "40% postes vacants",
+                    "principaux_dysfonctionnements": ["Déserts médicaux"],
+                },
+                {
+                    "domaine": "transport_mobilite",
+                    "gravite_globale": "modere",
+                    "bilan_executif": "Transports fluides",
+                    "cause": "Axes saturés",
+                    "preuve": "Embouteillages",
+                    "principaux_dysfonctionnements": ["Voirie"],
+                },
             ],
         ]
 
-        # Réponses mockées du LLM pour chaque appel
-        mock_call_llm.side_effect = [
-            # Stage 1 (Lot Santé)
-            '{"gravite": "grave", "resume_court": "Micro santé", "problematique_identifiee": "Problème", "consequence_potentielle": "Risque", "besoins_reels_detectes": "Soins", "solutions_recommandees": "Aides"}',
-            # Stage 1 (Lot Transport)
-            '{"gravite": "modere", "resume_court": "Micro transport", "problematique_identifiee": "Problème", "consequence_potentielle": "Risque", "besoins_reels_detectes": "Voirie", "solutions_recommandees": "Travaux"}',
-            # Stage 2 (Lot Santé)
-            '{"gravite": "grave", "resume_consolide": "Meso santé", "tendance_majeure": "Tendance", "impacts_territoriaux": "Impacts", "actions_prioritaires": "Actions"}',
-            # Stage 2 (Lot Transport)
-            '{"gravite": "modere", "resume_consolide": "Meso transport", "tendance_majeure": "Tendance", "impacts_territoriaux": "Impacts", "actions_prioritaires": "Actions"}',
-            # Stage 3 (Bilan Santé)
-            '{"gravite_globale": "grave", "bilan_executif": "Bilan santé", "points_chauds_geographiques": ["Ajaccio"], "principaux_dysfonctionnements": ["Pénurie"], "preconisations_strategiques": ["Aide"]}',
-            # Stage 3 (Bilan Transport)
-            '{"gravite_globale": "modere", "bilan_executif": "Bilan transport", "points_chauds_geographiques": ["Bastia"], "principaux_dysfonctionnements": ["Voirie"], "preconisations_strategiques": ["Plan"]}',
-            # Stage 4 (Rapport Global)
-            '{"titre": "Rapport Stratégique Territorial", "statut_general": "critique", "faits_marquants_du_mois": ["Fait 1"], "synthese_transversale": "Transversale", "tableau_de_bord_domaines": [], "recommandations_prioritaires_decideurs": ["Action 1"]}',
-            # Stage 5 (Synthèse Finale N°1)
-            '{"domaine_prioritaire_identifie": "sante_secours", "probleme_majeur_persistant": "Crise aiguë des déserts médicaux", "statut_urgence": "critique", "justification_priorite_absolue": "Urgence sanitaire vitale", "faits_saillants_et_recurrences": ["Saturation urgences"], "impacts_et_risques_inaction": "Rupture de soins", "plan_d_action_et_solutions_recommandees": [{"priorite": "Urgence", "action": "Plan renfort", "acteur_responsable": "ARS"}], "verdict_executif": "La santé requiert une mobilisation immédiate."}',
+        # Réponses mockées du LLM pour chaque stage
+        mock_llm_s1.side_effect = [
+            '{"gravite": "grave", "resume_court": "Micro santé", "problematique_identifiee": "Problème", "cause": "Manque praticiens", "preuve": "3 postes non pourvus", "consequence_potentielle": "Risque", "besoins_reels_detectes": "Soins", "solutions_recommandees": "Aides"}',
+            '{"gravite": "modere", "resume_court": "Micro transport", "problematique_identifiee": "Problème", "cause": "Travaux", "preuve": "Bouchons 10km", "consequence_potentielle": "Risque", "besoins_reels_detectes": "Voirie", "solutions_recommandees": "Travaux"}',
+        ]
+        mock_llm_s2.side_effect = [
+            '{"gravite": "grave", "resume_consolide": "Meso santé", "tendance_majeure": "Tendance", "cause": "Déficit général", "preuve": "Saturation continue", "impacts_territoriaux": "Impacts", "actions_prioritaires": "Actions"}',
+            '{"gravite": "modere", "resume_consolide": "Meso transport", "tendance_majeure": "Tendance", "cause": "Goulot d\'étranglement", "preuve": "Pics horaires", "impacts_territoriaux": "Impacts", "actions_prioritaires": "Actions"}',
+        ]
+        mock_llm_s3.side_effect = [
+            '{"gravite_globale": "grave", "bilan_executif": "Bilan santé", "cause": "Désertification rurale", "preuve": "Urgences fermées 15j", "points_chauds_geographiques": ["Ajaccio"], "principaux_dysfonctionnements": ["Pénurie"], "preconisations_strategiques": ["Aide"]}',
+            '{"gravite_globale": "modere", "bilan_executif": "Bilan transport", "cause": "Infrastructures vétustes", "preuve": "Temps de trajet doublé", "points_chauds_geographiques": ["Bastia"], "principaux_dysfonctionnements": ["Voirie"], "preconisations_strategiques": ["Plan"]}',
+        ]
+        mock_llm_s4.side_effect = [
+            '{"titre": "Rapport Stratégique Territorial", "statut_general": "critique", "cause": "Afflux estival et sous-capacité", "preuve": "Hausse 30% des interventions", "faits_marquants_du_mois": ["Fait 1"], "synthese_transversale": "Transversale", "tableau_de_bord_domaines": [], "recommandations_prioritaires_decideurs": ["Action 1"]}',
+        ]
+        mock_llm_s5.side_effect = [
+            '{"domaine_prioritaire_identifie": "sante_secours", "probleme_majeur_persistant": "Crise aiguë des déserts médicaux", "cause": "Non-remplacement départs retraite", "preuve": "3 hôpitaux en grève et 40% postes vacants", "statut_urgence": "critique", "justification_priorite_absolue": "Urgence sanitaire vitale", "faits_saillants_et_recurrences": ["Saturation urgences"], "impacts_et_risques_inaction": "Rupture de soins", "plan_d_action_et_solutions_recommandees": [{"priorite": "Urgence", "action": "Plan renfort", "acteur_responsable": "ARS"}], "verdict_executif": "La santé requiert une mobilisation immédiate."}',
         ]
 
         # Exécuter l'ensemble du pipeline
@@ -106,7 +182,32 @@ class TestPipelineOrchestrator(unittest.TestCase):
         self.assertEqual(mock_save_global.call_count, 1)
         self.assertEqual(mock_save_finale.call_count, 1)
 
+        # Vérifier que les documents sauvegardés contiennent les champs cause et preuve
+        saved_l1 = mock_save_l1.call_args_list[0][0][0]
+        self.assertIn("cause", saved_l1)
+        self.assertIn("preuve", saved_l1)
+        self.assertEqual(saved_l1["cause"], "Manque praticiens")
+
+        saved_l2 = mock_save_l2.call_args_list[0][0][0]
+        self.assertIn("cause", saved_l2)
+        self.assertIn("preuve", saved_l2)
+
+        saved_l3 = mock_save_bilan.call_args_list[0][0][0]
+        self.assertIn("cause", saved_l3)
+        self.assertIn("preuve", saved_l3)
+
+        saved_l4 = mock_save_global.call_args_list[0][0][0]
+        self.assertIn("cause", saved_l4)
+        self.assertIn("preuve", saved_l4)
+
+        saved_l5 = mock_save_finale.call_args_list[0][0][0]
+        self.assertIn("cause", saved_l5)
+        self.assertIn("preuve", saved_l5)
+        self.assertEqual(saved_l5["cause"], "Non-remplacement départs retraite")
+        self.assertEqual(saved_l5["preuve"], "3 hôpitaux en grève et 40% postes vacants")
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

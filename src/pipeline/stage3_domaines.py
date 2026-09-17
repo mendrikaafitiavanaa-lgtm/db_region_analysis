@@ -32,14 +32,16 @@ def run_stage_3(run_id: Optional[str] = None) -> Dict:
 
     # 1. Charger toutes les synthèses L2
     all_l2_docs = source_reader.read_stage_documents(
-        collection_name=settings.MONGO_L2_COLLECTION
+        collection_name=settings.MONGO_SYNTHESES_COLLECTION,
+        stage_type="synthese_l2",
     )
 
     if not all_l2_docs:
         # Si L2 est vide, fallback sur L1 si existant
         logger.warning("[STAGE 3] Aucune synthèse L2 trouvée, tentative de lecture depuis L1...")
         all_l2_docs = source_reader.read_stage_documents(
-            collection_name=settings.MONGO_L1_COLLECTION
+            collection_name=settings.MONGO_SYNTHESES_COLLECTION,
+            stage_type="synthese_l1",
         )
 
     if not all_l2_docs:
@@ -57,7 +59,8 @@ def run_stage_3(run_id: Optional[str] = None) -> Dict:
     total_ok = 0
     total_erreurs = 0
     start_time = time.time()
-    mois_label = settings.MOIS_CIBLE or "Mois d'analyse"
+    mois_label = settings.MOIS_CIBLE or "2026-08"
+    region_label = settings.REGION or "region_corse_sud"
 
     for dom, l2_list in by_domain.items():
         dom_start = time.time()
