@@ -45,17 +45,17 @@ MONGO_SOURCE_COLLECTION = os.getenv("MONGO_SOURCE_COLLECTION", "Corse-du-Sud").s
 # 1. Collection Terrain (Stages 1 et 2 : L1 + L2)
 MONGO_SYNTHESES_COLLECTION = os.getenv(
     "MONGO_SYNTHESES_COLLECTION",
-    os.getenv("MONGO_L1_COLLECTION", "Corse_Sud_syntheses_anaylisis"),
+    os.getenv("MONGO_L1_COLLECTION", "Corse_Sud_syntheses_analysis"),
 ).strip().lstrip("=")
 
 # 2. Collection Stratégique (Stages 3 et 4 : Bilans domaines + Rapport global)
 MONGO_DOMAINES_COLLECTION = os.getenv(
-    "MONGO_DOMAINES_COLLECTION", "Corse_Sud_domaines_anaylisis"
+    "MONGO_DOMAINES_COLLECTION", "Corse_Sud_domaines_analysis"
 ).strip().lstrip("=")
 
 # 3. Collection Finale Décideurs (Stage 5 : Synthèse mensuelle arbitrage)
 MONGO_FINALE_COLLECTION = os.getenv(
-    "MONGO_FINALE_COLLECTION", "Corse_Sud_mensuel_anaylisis"
+    "MONGO_FINALE_COLLECTION", "Corse_Sud_mensuel_analysis"
 ).strip().lstrip("=")
 
 # Alias de compatibilité
