@@ -38,7 +38,11 @@ def _float(name: str, default: float) -> float:
 
 
 # --- MongoDB (3 collections de destination + 1 source) ---
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/").strip()
+MONGO_URI = (
+    os.getenv("MONGO_URI")
+    or os.getenv("MONGODB_URI")
+    or "mongodb://localhost:27017/"
+).strip()
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "France-Corse").strip()
 MONGO_SOURCE_COLLECTION = os.getenv("MONGO_SOURCE_COLLECTION", "Corse-du-Sud").strip().lstrip("=")
 
