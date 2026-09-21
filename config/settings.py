@@ -1,7 +1,12 @@
 """
-Config centralisée. Tout le reste du code lit ses paramètres ICI,
+Config centralisée pour le pipeline d'analyse territoriale Corse.
+Supporte :
+- 4 collections sources hétérogènes (Corse-du-Sud, Haute-Corse, Region-Corse, Corse)
+- 3 collections cibles unifiées (Syntheses, Domaines, Finale)
+- 4 fournisseurs LLM gratuits (Groq, Google Gemini, OpenRouter, Hugging Face)
 """
 import os
+from typing import List, Dict
 
 
 def _load_env_file():
@@ -30,36 +35,70 @@ _load_env_file()
 
 
 def _int(name: str, default: int) -> int:
-    return int(os.getenv(name, default))
+    try:
+        return int(os.getenv(name, default))
+    except Exception:
+        return default
 
 
 def _float(name: str, default: float) -> float:
-    return float(os.getenv(name, default))
+    try:
+        return float(os.getenv(name, default))
+    except Exception:
+        return default
 
 
-# --- MongoDB (3 collections de destination + 1 source) ---
+# --- MongoDB Connection ---
 MONGO_URI = (
     os.getenv("MONGO_URI")
     or os.getenv("MONGODB_URI")
     or "mongodb://localhost:27017/"
 ).strip()
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "France-Corse").strip()
-MONGO_SOURCE_COLLECTION = os.getenv("MONGO_SOURCE_COLLECTION", "Corse-du-Sud").strip().lstrip("=")
 
+# --- 4 Collections Sources Hétérogènes ---
+MONGO_SOURCE_COLLECTION_A = os.getenv("MONGO_SOURCE_COLLECTION_A", "Corse-du-Sud").strip()
+MONGO_SOURCE_COLLECTION_B = os.getenv("MONGO_SOURCE_COLLECTION_B", "Haute-Corse").strip()
+MONGO_SOURCE_COLLECTION_C = os.getenv("MONGO_SOURCE_COLLECTION_C", "Region-Corse").strip()
+MONGO_SOURCE_COLLECTION_D = os.getenv("MONGO_SOURCE_COLLECTION_D", "Corse").strip()
+
+# Compatibilité et registre des sources
+MONGO_SOURCE_COLLECTION = os.getenv("MONGO_SOURCE_COLLECTION", MONGO_SOURCE_COLLECTION_A).strip().lstrip("=")
+
+def get_source_collections() -> List[str]:
+    """Retourne la liste ordonnée et unique des collections sources configurées."""
+    sources = []
+    for coll in [
+        MONGO_SOURCE_COLLECTION_A,
+        MONGO_SOURCE_COLLECTION_B,
+        MONGO_SOURCE_COLLECTION_C,
+        MONGO_SOURCE_COLLECTION_D,
+    ]:
+        if coll and coll not in sources:
+            sources.append(coll)
+    if not sources:
+        sources = [MONGO_SOURCE_COLLECTION]
+    return sources
+
+
+# --- 3 Collections Cibles Unifiées (Option B) ---
 # 1. Collection Terrain (Stages 1 et 2 : L1 + L2)
-MONGO_SYNTHESES_COLLECTION = os.getenv(
-    "MONGO_SYNTHESES_COLLECTION",
-    os.getenv("MONGO_L1_COLLECTION", "Corse_Sud_syntheses_analysis"),
+MONGO_SYNTHESES_COLLECTION = (
+    os.getenv("MONGO_SYNTHESES_COLLECTION")
+    or os.getenv("MONGO_L1_COLLECTION")
+    or "France_Corse_syntheses_analysis"
 ).strip().lstrip("=")
 
 # 2. Collection Stratégique (Stages 3 et 4 : Bilans domaines + Rapport global)
-MONGO_DOMAINES_COLLECTION = os.getenv(
-    "MONGO_DOMAINES_COLLECTION", "Corse_Sud_domaines_analysis"
+MONGO_DOMAINES_COLLECTION = (
+    os.getenv("MONGO_DOMAINES_COLLECTION")
+    or "France_Corse_domaines_analysis"
 ).strip().lstrip("=")
 
 # 3. Collection Finale Décideurs (Stage 5 : Synthèse mensuelle arbitrage)
-MONGO_FINALE_COLLECTION = os.getenv(
-    "MONGO_FINALE_COLLECTION", "Corse_Sud_mensuel_analysis"
+MONGO_FINALE_COLLECTION = (
+    os.getenv("MONGO_FINALE_COLLECTION")
+    or "France_Corse_mensuel_analysis"
 ).strip().lstrip("=")
 
 # Alias de compatibilité
@@ -68,44 +107,72 @@ MONGO_L2_COLLECTION = MONGO_SYNTHESES_COLLECTION
 MONGO_GLOBAL_COLLECTION = MONGO_DOMAINES_COLLECTION
 
 
-# --- OpenRouter ---
+# --- LLM Providers Configuration (4 Providers) ---
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto").lower()
+LLM_COOLDOWN_HOURS = _float("LLM_COOLDOWN_HOURS", 0.0)
+LLM_PROVIDER_ORDER = [
+    p.strip().lower()
+    for p in os.getenv("LLM_PROVIDER_ORDER", "groq,google,openrouter,huggingface").split(",")
+    if p.strip()
+]
+
+# 1. Groq (Llama 3 / Mixtral ultra rapide)
+GROQ_API_KEY = (
+    os.getenv("GROQ_API_KEY")
+    or os.getenv("GROK_AI_API_KEY")
+    or os.getenv("GROQ_AI_API_KEY", "")
+).strip().strip('"').strip("'")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
+GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").strip()
+GROQ_FALLBACK_MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "mixtral-8x7b-32768",
+    "gemma2-9b-it",
+]
+
+# 2. Google AI Studio (Gemini Flash)
+GOOGLE_AI_API_KEY = (
+    os.getenv("GOOGLE_AI_API_KEY")
+    or os.getenv("GEMINI_API_KEY", "")
+).strip().strip('"').strip("'")
+GOOGLE_AI_BASE_URL = os.getenv("GOOGLE_AI_BASE_URL", "https://generativelanguage.googleapis.com").strip()
+GOOGLE_AI_MODEL = os.getenv("GOOGLE_AI_MODEL", "gemini-flash-lite-latest").strip()
+
+# 3. OpenRouter
 OPENROUTER_API_KEY = (
     os.getenv("OPENROUTER_API_KEY")
     or os.getenv("openRouter_API_KEY", "")
     or os.getenv("openrouter_api_key", "")
-)
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
-OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-# Les modèles libres changent souvent. Pour éviter les 404/402 inutiles, on garde uniquement le modèle connu valide
-# et on laisse le failover automatique décider sans enchaîner des slugs inaccessibles.
-OPENROUTER_FALLBACK_MODELS = [
-    "openrouter/free",
+).strip().strip('"').strip("'")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free").strip()
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").strip()
+OPENROUTER_FALLBACK_MODELS = ["openrouter/free"]
+
+# 4. Hugging Face Inference
+HUGGINGFACE_API_KEY = (
+    os.getenv("HUGGINGFACE_API_KEY")
+    or os.getenv("HUGGINFACE_AI_API_KEY")
+    or os.getenv("HF_TOKEN", "")
+).strip().strip('"').strip("'")
+HUGGINGFACE_MODEL = (
+    os.getenv("HUGGINGFACE_MODEL")
+    or os.getenv("HUGGINFACE_AI_MODEL")
+    or "Qwen/Qwen2.5-72B-Instruct"
+).strip()
+HUGGINGFACE_BASE_URL = os.getenv("HUGGINGFACE_BASE_URL", "https://router.huggingface.co/hf-inference/v1").strip()
+HUGGINGFACE_FALLBACK_MODELS = [
+    "Qwen/Qwen2.5-72B-Instruct",
+    "meta-llama/Llama-3.3-70B-Instruct",
+    "mistralai/Mistral-7B-Instruct-v0.3",
 ]
 
-# --- LLM provider selection & failover ---
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto").lower()
-# 0 = cooldown désactivé ; cela évite de bloquer indéfiniment un fournisseur sur un vieux fichier de checkpoint
-LLM_COOLDOWN_HOURS = _float("LLM_COOLDOWN_HOURS", 0.0)
-# Ordre de priorité des providers en mode fallback (séparés par virgule, ex: "google,openrouter" ou "openrouter,google")
-LLM_PROVIDER_ORDER = [
-    p.strip().lower()
-    for p in os.getenv("LLM_PROVIDER_ORDER", "google,openrouter").split(",")
-    if p.strip()
-]
-
-# --- Google AI Studio ---
-GOOGLE_AI_API_KEY = (
-    os.getenv("GOOGLE_AI_API_KEY")
-    or os.getenv("GEMINI_API_KEY", "")
-)
-GOOGLE_AI_BASE_URL = os.getenv("GOOGLE_AI_BASE_URL", "https://generativelanguage.googleapis.com")
-GOOGLE_AI_MODEL = os.getenv("GOOGLE_AI_MODEL", "gemini-flash-lite-latest")
 
 # --- Filtre temporel et territorial ---
-MOIS_CIBLE = os.getenv("MOIS_CIBLE", "2026-08").strip()  # ex: "2026-08", vide = pas de filtre
-REGION = os.getenv("REGION", "region_corse_sud").strip()  # ex: "region_corse_sud"
+MOIS_CIBLE = os.getenv("MOIS_CIBLE", "2026-08").strip()
+REGION = os.getenv("REGION", "Corse").strip()
 
-# --- Performance ---
+# --- Performance & Découpage par Lots ---
 BATCH_SIZE = _int("BATCH_SIZE", 8)
 PAUSE_SECONDES = _float("PAUSE_SECONDES", 1.5)
 MAX_WORKERS = _int("MAX_WORKERS", 1)
@@ -116,9 +183,7 @@ RAW_TEXT_MAX_CHARS = _int("RAW_TEXT_MAX_CHARS", 250)
 LLM_MAX_TOKENS_OUTPUT = _int("LLM_MAX_TOKENS_OUTPUT", 1500)
 LLM_TIMEOUT_SECONDES = _int("LLM_TIMEOUT_SECONDES", 45)
 LLM_MAX_RETRIES = _int("LLM_MAX_RETRIES", 3)
-# Limiteur d'appels LLM (globally across threads, ex: 15 req/min pour free tier Google)
 LLM_REQUESTS_PER_MINUTE = _int("LLM_REQUESTS_PER_MINUTE", 14)
-# Optionnel: budget de tokens estimés par jour (0 = désactivé)
 LLM_TOKEN_BUDGET_DAILY = _int("LLM_TOKEN_BUDGET_DAILY", 0)
 
 # --- Chemins ---
@@ -128,25 +193,26 @@ CHECKPOINT_DIR = os.path.join(BASE_DIR, ".checkpoint")
 
 
 def validate():
-    """Appelé au démarrage : vérifie la disponibilité d'au moins un fournisseur LLM."""
-    has_google = bool((GOOGLE_AI_API_KEY or "").strip())
-    has_openrouter = bool((OPENROUTER_API_KEY or "").strip())
+    """Appelé au démarrage : vérifie la disponibilité d'au moins un fournisseur LLM configuré."""
+    has_groq = bool(GROQ_API_KEY)
+    has_google = bool(GOOGLE_AI_API_KEY)
+    has_openrouter = bool(OPENROUTER_API_KEY)
+    has_hf = bool(HUGGINGFACE_API_KEY)
 
-    if LLM_PROVIDER == "auto":
-        if not has_google and not has_openrouter:
-            raise RuntimeError(
-                "Aucune clé d'API trouvée ! Remplis GOOGLE_AI_API_KEY ou OPENROUTER_API_KEY dans .env."
-            )
-    elif LLM_PROVIDER in ("google", "google_aistudio", "aistudio"):
-        if not has_google:
-            raise RuntimeError(
-                "Variables .env manquantes: GOOGLE_AI_API_KEY (ou GEMINI_API_KEY)."
-            )
-    elif LLM_PROVIDER == "openrouter":
-        if not has_openrouter:
-            raise RuntimeError(
-                "Variables .env manquantes: OPENROUTER_API_KEY."
-            )
-    else:
-        raise RuntimeError(f"LLM_PROVIDER inconnu: {LLM_PROVIDER}. Choisir 'auto', 'google', ou 'openrouter'.")
+    available = []
+    if has_groq: available.append("groq")
+    if has_google: available.append("google")
+    if has_openrouter: available.append("openrouter")
+    if has_hf: available.append("huggingface")
 
+    if not available:
+        raise RuntimeError(
+            "Aucune clé d'API LLM configurée ! Veuillez remplir au moins une clé dans .env "
+            "(GROK_AI_API_KEY, GOOGLE_AI_API_KEY, OPENROUTER_API_KEY, ou HUGGINFACE_AI_API_KEY)."
+        )
+
+    if LLM_PROVIDER != "auto" and LLM_PROVIDER not in available:
+        raise RuntimeError(
+            f"LLM_PROVIDER est réglé sur '{LLM_PROVIDER}', mais sa clé d'API est manquante ou vide dans .env. "
+            f"Providers disponibles avec clé : {available}."
+        )

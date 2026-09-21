@@ -52,6 +52,8 @@ class TestCooldownAndFailover(unittest.TestCase):
     @patch("src.llm.google_client.call_llm")
     def test_failover_and_subsequent_skip(self, mock_google, mock_openrouter):
         settings.LLM_COOLDOWN_HOURS = 24.0
+        settings.LLM_PROVIDER = "auto"
+        settings.LLM_PROVIDER_ORDER = ["google", "openrouter"]
         mock_google.side_effect = GoogleQuotaError("HTTP 429 Quota Exceeded")
         mock_openrouter.return_value = '{"synthese": "test"}'
 
@@ -76,8 +78,8 @@ class TestCooldownAndFailover(unittest.TestCase):
     @patch("src.llm.google_client.call_llm")
     def test_both_in_cooldown_raises_error(self, mock_google, mock_openrouter):
         settings.LLM_COOLDOWN_HOURS = 24.0
-        cooldown_manager.mark_cooldown("google", "429", 24)
-        cooldown_manager.mark_cooldown("openrouter", "429", 24)
+        for p in ("groq", "google", "openrouter", "huggingface"):
+            cooldown_manager.mark_cooldown(p, "429", 24)
 
         messages = [{"role": "user", "content": "hello"}]
         with self.assertRaises(client.LLMError) as ctx:

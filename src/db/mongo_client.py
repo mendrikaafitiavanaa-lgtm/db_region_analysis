@@ -1,4 +1,5 @@
 """Connexion MongoDB centralisée et accès aux 3 collections de la pyramide d'analyse."""
+from typing import Optional
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from config import settings
@@ -21,9 +22,10 @@ def get_collection(name: str) -> Collection:
     return get_db()[name]
 
 
-def get_source_collection() -> Collection:
+def get_source_collection(collection_name: Optional[str] = None) -> Collection:
     """Collection source des articles bruts (Niveau 0)."""
-    return get_collection(settings.MONGO_SOURCE_COLLECTION)
+    target = collection_name or settings.MONGO_SOURCE_COLLECTION
+    return get_collection(target)
 
 
 def get_syntheses_collection() -> Collection:

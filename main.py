@@ -2,15 +2,22 @@
 Point d'entrée principal du système d'analyse et synthèse territoriale Corse.
 
 Utilisation :
-    # Exécuter l'ensemble de la pyramide (Stages 1 à 5)
+    # Exécuter l'ensemble de la pyramide pour toutes les collections (Stages 1 à 5)
     python main.py
 
+    # Exécuter un territoire spécifique
+    python main.py --dept Haute-Corse
+    python main.py --dept "Corse-du-Sud"
+
+    # Exécuter avec une limite de lots pour la session (ex: pause après 50 lots)
+    python main.py --stage 1 --limit 50
+
     # Exécuter un étage spécifique
-    python main.py --stage 1    # 2 000 docs bruts -> 250 micro-synthèses L1
-    python main.py --stage 2    # 250 synthèses L1 -> 32 méso-synthèses L2
-    python main.py --stage 3    # 32 synthèses L2  -> 9 bilans de domaine L3
-    python main.py --stage 4    # 9 bilans domaine -> 1 Rapport Global Territorial
-    python main.py --stage 5    # Rapport Global   -> 1 Synthèse Finale Problème N°1
+    python main.py --stage 1    # Docs bruts -> micro-synthèses L1
+    python main.py --stage 2    # Synthèses L1 -> méso-synthèses L2
+    python main.py --stage 3    # Synthèses L2 -> bilans de domaine L3
+    python main.py --stage 4    # Bilans domaine -> Rapport Global Territorial L4
+    python main.py --stage 5    # Rapport Global -> Synthèse Finale Problème N°1 L5
 
     # Filtrer sur un mois spécifique
     python main.py --stage all --mois 2026-08
@@ -24,7 +31,7 @@ from src.utils.logger import get_logger
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Système d'analyse et enrichissement pyramidal multi-niveaux (Corse)"
+        description="Système d'analyse et enrichissement pyramidal multi-territoires (Corse)"
     )
     parser.add_argument(
         "--stage",
@@ -32,6 +39,18 @@ def parse_args():
         default="all",
         choices=["1", "2", "3", "4", "5", "all"],
         help="Étage à exécuter (1: micro, 2: méso, 3: bilans domaines, 4: rapport global, 5: synthèse finale problème N°1, all: tout)",
+    )
+    parser.add_argument(
+        "--dept",
+        type=str,
+        default="all",
+        help="Territoire ou collection source cible (ex: 'Haute-Corse', 'Corse-du-Sud', 'Region-Corse', 'Corse', ou 'all' par défaut)",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="Nombre maximum de lots/documents à traiter lors de cette session (0 = illimité). Idéal pour les pauses et les quotas.",
     )
     parser.add_argument(
         "--mois",
@@ -56,12 +75,17 @@ def main():
         logger.info(f"Filtre temporel forcé : {settings.MOIS_CIBLE}")
 
     try:
-        run_pipeline(stage=args.stage, force=args.force)
+        run_pipeline(
+            stage=args.stage,
+            force=args.force,
+            dept=args.dept,
+            limit=args.limit,
+        )
     except KeyboardInterrupt:
         logger.warning("\nArrêt manuel demandé par l'utilisateur (Ctrl+C).")
         sys.exit(0)
     except Exception as exc:
-        logger.error(f"Arrêt sur exception non gérée : {exc}", exc_info=True)
+        logger.error(f"Arrêt sur exception : {exc}", exc_info=True)
         sys.exit(1)
 
 

@@ -125,6 +125,7 @@ def group_documents_into_batches(
     documents: List[dict],
     batch_size: int = 8,
     min_batch_size: int = 2,
+    domain_field: str = "domaine_principal",
 ) -> List[Dict]:
     """
     Regroupe une liste de documents bruts STRICTEMENT par domaine thématique,
@@ -146,7 +147,7 @@ def group_documents_into_batches(
     by_domain = defaultdict(list)
     for doc in documents:
         # Si le document a déjà un domaine pré-calculé (ex: L1/L2)
-        dom = doc.get("domaine_principal")
+        dom = doc.get(domain_field) or doc.get("domaine_principal") or doc.get("domaine")
         if not dom:
             dom = classify_document(
                 title=doc.get("title", ""),

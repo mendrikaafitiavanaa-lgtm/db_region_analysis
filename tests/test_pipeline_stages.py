@@ -17,11 +17,11 @@ class TestPipelineOrchestrator(unittest.TestCase):
     @patch("src.db.target_writer.save_bilan_domaine")
     @patch("src.db.target_writer.save_rapport_global")
     @patch("src.db.target_writer.save_rapport_mensuel_finale")
-    @patch("src.pipeline.stage1_micro.call_llm")
-    @patch("src.pipeline.stage2_meso.call_llm")
-    @patch("src.pipeline.stage3_domaines.call_llm")
-    @patch("src.pipeline.stage4_global.call_llm")
-    @patch("src.pipeline.stage5_finale.call_llm")
+    @patch("src.pipeline.stage1_micro.call_llm_with_meta")
+    @patch("src.pipeline.stage2_meso.call_llm_with_meta")
+    @patch("src.pipeline.stage3_domaines.call_llm_with_meta")
+    @patch("src.pipeline.stage4_global.call_llm_with_meta")
+    @patch("src.pipeline.stage5_finale.call_llm_with_meta")
     def test_run_full_pipeline_mocked(
         self,
         mock_llm_s5,
@@ -146,24 +146,24 @@ class TestPipelineOrchestrator(unittest.TestCase):
             ],
         ]
 
-        # Réponses mockées du LLM pour chaque stage
+        # Réponses mockées du LLM avec métadonnées (texte, nom_provider)
         mock_llm_s1.side_effect = [
-            '{"gravite": "grave", "resume_court": "Micro santé", "problematique_identifiee": "Problème", "cause": "Manque praticiens", "preuve": "3 postes non pourvus", "consequence_potentielle": "Risque", "besoins_reels_detectes": "Soins", "solutions_recommandees": "Aides"}',
-            '{"gravite": "modere", "resume_court": "Micro transport", "problematique_identifiee": "Problème", "cause": "Travaux", "preuve": "Bouchons 10km", "consequence_potentielle": "Risque", "besoins_reels_detectes": "Voirie", "solutions_recommandees": "Travaux"}',
+            ('{"gravite": "grave", "resume_court": "Micro santé", "problematique_identifiee": "Problème", "cause": "Manque praticiens", "preuve": "3 postes non pourvus", "consequence_potentielle": "Risque", "besoins_reels_detectes": "Soins", "solutions_recommandees": "Aides"}', "groq"),
+            ('{"gravite": "modere", "resume_court": "Micro transport", "problematique_identifiee": "Problème", "cause": "Travaux", "preuve": "Bouchons 10km", "consequence_potentielle": "Risque", "besoins_reels_detectes": "Voirie", "solutions_recommandees": "Travaux"}', "groq"),
         ]
         mock_llm_s2.side_effect = [
-            '{"gravite": "grave", "resume_consolide": "Meso santé", "tendance_majeure": "Tendance", "cause": "Déficit général", "preuve": "Saturation continue", "impacts_territoriaux": "Impacts", "actions_prioritaires": "Actions"}',
-            '{"gravite": "modere", "resume_consolide": "Meso transport", "tendance_majeure": "Tendance", "cause": "Goulot d\'étranglement", "preuve": "Pics horaires", "impacts_territoriaux": "Impacts", "actions_prioritaires": "Actions"}',
+            ('{"gravite": "grave", "resume_consolide": "Meso santé", "tendance_majeure": "Tendance", "cause": "Déficit général", "preuve": "Saturation continue", "impacts_territoriaux": "Impacts", "actions_prioritaires": "Actions"}', "google"),
+            ('{"gravite": "modere", "resume_consolide": "Meso transport", "tendance_majeure": "Tendance", "cause": "Goulot d\'étranglement", "preuve": "Pics horaires", "impacts_territoriaux": "Impacts", "actions_prioritaires": "Actions"}', "google"),
         ]
         mock_llm_s3.side_effect = [
-            '{"gravite_globale": "grave", "bilan_executif": "Bilan santé", "cause": "Désertification rurale", "preuve": "Urgences fermées 15j", "points_chauds_geographiques": ["Ajaccio"], "principaux_dysfonctionnements": ["Pénurie"], "preconisations_strategiques": ["Aide"]}',
-            '{"gravite_globale": "modere", "bilan_executif": "Bilan transport", "cause": "Infrastructures vétustes", "preuve": "Temps de trajet doublé", "points_chauds_geographiques": ["Bastia"], "principaux_dysfonctionnements": ["Voirie"], "preconisations_strategiques": ["Plan"]}',
+            ('{"gravite_globale": "grave", "bilan_executif": "Bilan santé", "cause": "Désertification rurale", "preuve": "Urgences fermées 15j", "points_chauds_geographiques": ["Ajaccio"], "principaux_dysfonctionnements": ["Pénurie"], "preconisations_strategiques": ["Aide"]}', "openrouter"),
+            ('{"gravite_globale": "modere", "bilan_executif": "Bilan transport", "cause": "Infrastructures vétustes", "preuve": "Temps de trajet doublé", "points_chauds_geographiques": ["Bastia"], "principaux_dysfonctionnements": ["Voirie"], "preconisations_strategiques": ["Plan"]}', "openrouter"),
         ]
         mock_llm_s4.side_effect = [
-            '{"titre": "Rapport Stratégique Territorial", "statut_general": "critique", "cause": "Afflux estival et sous-capacité", "preuve": "Hausse 30% des interventions", "faits_marquants_du_mois": ["Fait 1"], "synthese_transversale": "Transversale", "tableau_de_bord_domaines": [], "recommandations_prioritaires_decideurs": ["Action 1"]}',
+            ('{"titre": "Rapport Stratégique Territorial", "statut_general": "critique", "cause": "Afflux estival et sous-capacité", "preuve": "Hausse 30% des interventions", "faits_marquants_du_mois": ["Fait 1"], "synthese_transversale": "Transversale", "tableau_de_bord_domaines": [], "recommandations_prioritaires_decideurs": ["Action 1"]}', "huggingface"),
         ]
         mock_llm_s5.side_effect = [
-            '{"domaine_prioritaire_identifie": "sante_secours", "probleme_majeur_persistant": "Crise aiguë des déserts médicaux", "cause": "Non-remplacement départs retraite", "preuve": "3 hôpitaux en grève et 40% postes vacants", "statut_urgence": "critique", "justification_priorite_absolue": "Urgence sanitaire vitale", "faits_saillants_et_recurrences": ["Saturation urgences"], "impacts_et_risques_inaction": "Rupture de soins", "plan_d_action_et_solutions_recommandees": [{"priorite": "Urgence", "action": "Plan renfort", "acteur_responsable": "ARS"}], "verdict_executif": "La santé requiert une mobilisation immédiate."}',
+            ('{"domaine_prioritaire_identifie": "sante_secours", "probleme_majeur_persistant": "Crise aiguë des déserts médicaux", "cause": "Non-remplacement départs retraite", "preuve": "3 hôpitaux en grève et 40% postes vacants", "statut_urgence": "critique", "justification_priorite_absolue": "Urgence sanitaire vitale", "faits_saillants_et_recurrences": ["Saturation urgences"], "impacts_et_risques_inaction": "Rupture de soins", "plan_d_action_et_solutions_recommandees": [{"priorite": "Urgence", "action": "Plan renfort", "acteur_responsable": "ARS"}], "verdict_executif": "La santé requiert une mobilisation immédiate."}', "groq"),
         ]
 
         # Exécuter l'ensemble du pipeline
@@ -182,32 +182,34 @@ class TestPipelineOrchestrator(unittest.TestCase):
         self.assertEqual(mock_save_global.call_count, 1)
         self.assertEqual(mock_save_finale.call_count, 1)
 
-        # Vérifier que les documents sauvegardés contiennent les champs cause et preuve
+        # Vérifier que les documents sauvegardés contiennent les champs de traçabilité demandés
         saved_l1 = mock_save_l1.call_args_list[0][0][0]
-        self.assertIn("cause", saved_l1)
-        self.assertIn("preuve", saved_l1)
+        self.assertEqual(saved_l1["fournisseur_llm"], "groq")
+        self.assertIn("GROQ", saved_l1["cle_api_utilisee"])
+        self.assertIn("date_heure_traitement", saved_l1)
         self.assertEqual(saved_l1["cause"], "Manque praticiens")
 
         saved_l2 = mock_save_l2.call_args_list[0][0][0]
-        self.assertIn("cause", saved_l2)
-        self.assertIn("preuve", saved_l2)
+        self.assertEqual(saved_l2["fournisseur_llm"], "google")
+        self.assertIn("GOOGLE", saved_l2["cle_api_utilisee"])
+        self.assertIn("date_heure_traitement", saved_l2)
 
         saved_l3 = mock_save_bilan.call_args_list[0][0][0]
-        self.assertIn("cause", saved_l3)
-        self.assertIn("preuve", saved_l3)
+        self.assertEqual(saved_l3["fournisseur_llm"], "openrouter")
+        self.assertIn("OPENROUTER", saved_l3["cle_api_utilisee"])
+        self.assertIn("date_heure_traitement", saved_l3)
 
         saved_l4 = mock_save_global.call_args_list[0][0][0]
-        self.assertIn("cause", saved_l4)
-        self.assertIn("preuve", saved_l4)
+        self.assertEqual(saved_l4["fournisseur_llm"], "huggingface")
+        self.assertIn("HUGGINGFACE", saved_l4["cle_api_utilisee"])
+        self.assertIn("date_heure_traitement", saved_l4)
 
         saved_l5 = mock_save_finale.call_args_list[0][0][0]
-        self.assertIn("cause", saved_l5)
-        self.assertIn("preuve", saved_l5)
+        self.assertEqual(saved_l5["fournisseur_llm"], "groq")
+        self.assertIn("date_heure_traitement", saved_l5)
         self.assertEqual(saved_l5["cause"], "Non-remplacement départs retraite")
         self.assertEqual(saved_l5["preuve"], "3 hôpitaux en grève et 40% postes vacants")
 
 
 if __name__ == "__main__":
     unittest.main()
-
-

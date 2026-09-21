@@ -7,7 +7,7 @@ Flux :
    - Détection de l'unique problématique / domaine N°1 le plus persistant et récurrent du mois.
    - Justification de son urgence absolue.
    - Plan d'action prioritaire et solutions concrètes recommandées.
-3. Sauvegarde dans la collection finale mensuelle (settings.MONGO_FINALE_COLLECTION).
+3. Sauvegarde dans la collection unifiée finale (settings.MONGO_FINALE_COLLECTION).
 """
 import time
 from datetime import datetime
@@ -15,7 +15,7 @@ from typing import Dict, Optional
 
 from config import settings
 from src.db import source_reader, target_writer
-from src.llm.client import call_llm, get_error_class
+from src.llm.client import call_llm, call_llm_with_meta, get_error_class
 from src.llm.prompts.prompt_stage5 import build_stage5_messages
 from src.llm.response_parser import parse_stage5_response, ParsingError
 from src.schema.analyse_schema import build_stage5_document
@@ -23,7 +23,7 @@ from src.utils.logger import get_logger
 from src.llm import token_budget
 
 
-def run_stage_5(run_id: Optional[str] = None) -> Dict:
+def run_stage_5(run_id: Optional[str] = None, territoire: Optional[str] = None) -> Dict:
     logger = get_logger()
     settings.validate()
     target_writer.ensure_all_indexes()
@@ -35,6 +35,8 @@ def run_stage_5(run_id: Optional[str] = None) -> Dict:
     rapports_l4 = source_reader.read_stage_documents(
         collection_name=settings.MONGO_DOMAINES_COLLECTION,
         stage_type="rapport_global_mensuel",
+        territoire=territoire,
+        mois_cible=settings.MOIS_CIBLE,
     )
 
     if not rapports_l4:
@@ -48,54 +50,53 @@ def run_stage_5(run_id: Optional[str] = None) -> Dict:
     domain_bilans = source_reader.read_stage_documents(
         collection_name=settings.MONGO_DOMAINES_COLLECTION,
         stage_type="bilan_domaine",
+        territoire=territoire,
+        mois_cible=settings.MOIS_CIBLE,
     )
 
     start_time = time.time()
     mois_label = settings.MOIS_CIBLE or rapport_global.get("mois_cible") or "2026-08"
-    region_label = settings.REGION or rapport_global.get("region") or "region_corse_sud"
+    territoire_label = territoire or rapport_global.get("source_territoire") or settings.REGION or "Corse"
 
     try:
         messages = build_stage5_messages(
             rapport_global=rapport_global,
             domain_bilans=domain_bilans,
             mois=mois_label,
-            region=region_label,
+            region=territoire_label,
         )
-        raw_resp = call_llm(messages)
+        raw_resp, used_provider = call_llm_with_meta(messages)
         analyse = parse_stage5_response(raw_resp)
 
-        finale_doc = build_stage5_document(
+        doc_finale = build_stage5_document(
             rapport_global=rapport_global,
             analyse=analyse,
             mois=mois_label,
-            region=region_label,
+            region=settings.REGION,
+            territoire=territoire_label,
             run_id=run_id,
+            provider=used_provider,
         )
 
-        target_writer.save_rapport_mensuel_finale(finale_doc)
-        duration = time.time() - start_time
-
+        target_writer.save_rapport_mensuel_finale(doc_finale)
+        duree = time.time() - start_time
         logger.info(
-            f"=== [STAGE 5 TERMINÉ] 🏆 SYNTHÈSE FINALE N°1 GÉNÉRÉE avec succès en {duration:.1f}s ! ===\n"
-            f"Domaine N°1 : {finale_doc.get('domaine_prioritaire_identifie', '').upper()}\n"
-            f"Problème persistant : {finale_doc.get('probleme_majeur_persistant')}\n"
-            f"Niveau d'urgence : {finale_doc.get('statut_urgence', '').upper()}\n"
-            f"Verdict exécutif : {finale_doc.get('verdict_executif')}\n"
+            f"=== [STAGE 5 TERMINÉ] Synthèse Décideurs N°1 (provider={used_provider}) enregistrée en {duree:.1f}s ==="
         )
+        logger.info(f"   Domaine Prioritaire : {doc_finale.get('domaine_prioritaire_identifie')}")
+        logger.info(f"   Problème Majeur     : {doc_finale.get('probleme_majeur_persistant')}")
 
         return {
             "statut": "termine",
-            "domaine_prioritaire": finale_doc.get("domaine_prioritaire_identifie"),
-            "probleme_persistant": finale_doc.get("probleme_majeur_persistant"),
-            "statut_urgence": finale_doc.get("statut_urgence"),
-            "verdict_executif": finale_doc.get("verdict_executif"),
-            "total_sources": finale_doc.get("total_documents_sources_couverts"),
-            "duree_secondes": round(duration, 2),
+            "domaine_prioritaire": doc_finale.get("domaine_prioritaire_identifie"),
+            "probleme_persistant": doc_finale.get("probleme_majeur_persistant"),
+            "statut_urgence": doc_finale.get("statut_urgence"),
+            "duree_secondes": round(duree, 2),
         }
 
     except token_budget.BudgetExceeded as be:
         logger.warning(f"[STAGE 5] Arrêt: budget token atteint: {be}")
-        return {"statut": "erreur", "erreur": str(be)}
+        return {"statut": "erreur", "erreur": f"Budget dépassé: {be}"}
     except (get_error_class(), ParsingError, Exception) as exc:
-        logger.error(f"[STAGE 5] ÉCHEC synthèse finale: {exc}")
+        logger.error(f"[STAGE 5] ÉCHEC lors de la synthèse finale: {exc}")
         return {"statut": "erreur", "erreur": str(exc)}
