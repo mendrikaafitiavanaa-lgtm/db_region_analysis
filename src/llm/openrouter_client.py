@@ -78,13 +78,7 @@ def call_llm(messages: list) -> str:
                 )
 
                 if resp.status_code in (402, 429):
-                    err_msg = f"HTTP {resp.status_code}: {resp.text[:250]}"
-                    if resp.status_code == 402 or "quota" in resp.text.lower() or "credits" in resp.text.lower():
-                        raise OpenRouterQuotaError(err_msg)
-                    last_error = OpenRouterError(err_msg)
-                    backoff = min(6, 1.0 * (2 ** attempt))
-                    time.sleep(backoff + random.uniform(0, 0.5))
-                    continue
+                    raise OpenRouterQuotaError(f"HTTP {resp.status_code}: {resp.text[:250]}")
 
                 if resp.status_code == 404 or (resp.status_code == 400 and _looks_like_missing_model(resp.text)):
                     err_msg = f"HTTP {resp.status_code} ({model_name}): {resp.text[:250]}"

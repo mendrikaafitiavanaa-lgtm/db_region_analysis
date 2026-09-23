@@ -95,14 +95,7 @@ def call_llm(messages: list) -> str:
                     timeout=settings.LLM_TIMEOUT_SECONDES,
                 )
                 if resp.status_code == 429 or "RESOURCE_EXHAUSTED" in resp.text:
-                    err_msg = f"HTTP {resp.status_code}: {resp.text[:250]}"
-                    if "quota" in resp.text.lower() or "resource_exhausted" in resp.text.lower():
-                        raise GoogleQuotaError(err_msg)
-                    last_error = LLMError(err_msg)
-                    backoff = min(4, 0.5 * (2 ** attempt))
-                    time.sleep(backoff + random.uniform(0, 0.5))
-                    continue
-
+                    raise GoogleQuotaError(f"HTTP {resp.status_code}: {resp.text[:250]}")
                 if resp.status_code in (400, 404):
                     last_error = LLMError(f"HTTP {resp.status_code}: {resp.text[:200]}")
                     continue

@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 from datetime import datetime, timezone
 from src.db.normalizer import normalize_document, parse_datetime_flexible
-from src.llm import client, groq_client, google_client, openrouter_client, huggingface_client
+from src.llm import client, google_client, openrouter_client, nvidia_client
 
 
 class TestMultiSourceNormalizer(unittest.TestCase):
@@ -59,18 +59,17 @@ class TestMultiSourceNormalizer(unittest.TestCase):
 class TestMultiLLMFailover(unittest.TestCase):
 
     def test_quota_exceptions_defined(self):
-        self.assertIn(groq_client.GroqQuotaError, client.QUOTA_EXCEPTIONS)
         self.assertIn(google_client.GoogleQuotaError, client.QUOTA_EXCEPTIONS)
         self.assertIn(openrouter_client.OpenRouterQuotaError, client.QUOTA_EXCEPTIONS)
-        self.assertIn(huggingface_client.HuggingFaceQuotaError, client.QUOTA_EXCEPTIONS)
+        self.assertIn(nvidia_client.NvidiaQuotaError, client.QUOTA_EXCEPTIONS)
 
     @patch("config.settings.LLM_PROVIDER", "auto")
-    @patch("config.settings.LLM_PROVIDER_ORDER", ["groq", "google", "openrouter", "huggingface"])
+    @patch("config.settings.LLM_PROVIDER_ORDER", ["google", "openrouter", "nvidia"])
     def test_provider_pipeline_resolution(self):
         pipeline = client._get_provider_pipeline()
-        self.assertEqual(len(pipeline), 4)
+        self.assertEqual(len(pipeline), 3)
         names = [p[0] for p in pipeline]
-        self.assertEqual(names, ["groq", "google", "openrouter", "huggingface"])
+        self.assertEqual(names, ["google", "openrouter", "nvidia"])
 
 
 if __name__ == "__main__":

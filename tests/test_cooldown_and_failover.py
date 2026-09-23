@@ -78,7 +78,7 @@ class TestCooldownAndFailover(unittest.TestCase):
     @patch("src.llm.google_client.call_llm")
     def test_both_in_cooldown_raises_error(self, mock_google, mock_openrouter):
         settings.LLM_COOLDOWN_HOURS = 24.0
-        for p in ("groq", "google", "openrouter", "huggingface"):
+        for p in ("google", "openrouter", "nvidia"):
             cooldown_manager.mark_cooldown(p, "429", 24)
 
         messages = [{"role": "user", "content": "hello"}]
@@ -88,6 +88,44 @@ class TestCooldownAndFailover(unittest.TestCase):
         self.assertIn("Tous les fournisseurs LLM sont actuellement bloqués par un cooldown", str(ctx.exception))
         self.assertEqual(mock_google.call_count, 0)
         self.assertEqual(mock_openrouter.call_count, 0)
+
+    def test_api_key_change_lifts_cooldown_immediately(self):
+        settings.LLM_COOLDOWN_HOURS = 24.0
+        old_key = getattr(settings, "NVIDIA_API_KEY", "old_nvidia_key")
+        settings.NVIDIA_API_KEY = "initial_key_123"
+
+        # Marquer Nvidia en cooldown 24h
+        cooldown_manager.mark_cooldown("nvidia", "HTTP 429 Quota Exceeded", duration_hours=24.0)
+        self.assertFalse(cooldown_manager.is_provider_available("nvidia"))
+        self.assertGreater(cooldown_manager.get_remaining_cooldown_seconds("nvidia"), 0.0)
+
+        # L'utilisateur change sa clé API Nvidia
+        settings.NVIDIA_API_KEY = "new_fresh_key_456"
+
+        # Le cooldown doit être immédiatement levé !
+        self.assertTrue(cooldown_manager.is_provider_available("nvidia"))
+        self.assertEqual(cooldown_manager.get_remaining_cooldown_seconds("nvidia"), 0.0)
+
+        # Rétablir la clé originale
+        settings.NVIDIA_API_KEY = old_key
+
+    def test_legacy_cooldown_without_fingerprint_is_lifted(self):
+        settings.LLM_COOLDOWN_HOURS = 24.0
+        # Simuler un fichier de cooldown existant sans champ key_fingerprint
+        legacy_state = {
+            "google": {
+                "cooldown_until": 9999999999.0,
+                "duration_hours": 24.0,
+                "reason": "Old legacy 429 without fingerprint",
+            }
+        }
+        import json
+        with open(cooldown_manager.COOLDOWN_FILE, "w", encoding="utf-8") as f:
+            json.dump(legacy_state, f)
+
+        # Doit être immédiatement disponible et le cooldown levé
+        self.assertTrue(cooldown_manager.is_provider_available("google"))
+        self.assertEqual(cooldown_manager.get_remaining_cooldown_seconds("google"), 0.0)
 
 
 if __name__ == "__main__":

@@ -1,11 +1,10 @@
 """
 Wrapper LLM avec basculement automatique (failover) multi-fournisseurs.
 
-Supporte 4 fournisseurs gratuits en cascade :
-1. Groq (Llama 3.3 / Mixtral)
-2. Google Gemini (Flash Lite)
-3. OpenRouter (Free models)
-4. Hugging Face (Inference Router)
+Supporte 3 fournisseurs en cascade par défaut :
+1. Google Gemini (Flash Lite)
+2. OpenRouter (Modèles gratuits)
+3. NVIDIA NIM (DeepSeek / Llama / Nemotron)
 
 En cas d'erreur de quota (HTTP 429/402), bascule automatiquement sur le fournisseur suivant
 sans interrompre le traitement.
@@ -16,14 +15,13 @@ from config import settings
 from src.llm import cooldown_manager
 from src.llm.rate_limiter import global_rate_limiter
 from src.llm import token_budget
-from src.llm import groq_client
 from src.llm import google_client
 from src.llm import openrouter_client
-from src.llm import huggingface_client
+from src.llm import nvidia_client
 
 logger = logging.getLogger("scraper_logger")
 
-_LAST_PROVIDER_USED = "groq"
+_LAST_PROVIDER_USED = "google"
 
 
 class LLMError(Exception):
@@ -32,10 +30,9 @@ class LLMError(Exception):
 
 # Tuple de toutes les exceptions de quota pour interception standardisée
 QUOTA_EXCEPTIONS = (
-    groq_client.GroqQuotaError,
     google_client.GoogleQuotaError,
     openrouter_client.OpenRouterQuotaError,
-    huggingface_client.HuggingFaceQuotaError,
+    nvidia_client.NvidiaQuotaError,
 )
 
 
@@ -51,22 +48,19 @@ def _get_provider_pipeline() -> List[Tuple[str, callable]]:
 
     for p in order:
         p_clean = p.strip().lower()
-        if p_clean in ("groq", "grok"):
-            pipeline.append(("groq", groq_client.call_llm))
-        elif p_clean in ("google", "google_aistudio", "aistudio", "gemini"):
+        if p_clean in ("google", "google_aistudio", "aistudio", "gemini"):
             pipeline.append(("google", google_client.call_llm))
-        elif p_clean == "openrouter":
+        elif p_clean in ("openrouter", "open_router"):
             pipeline.append(("openrouter", openrouter_client.call_llm))
-        elif p_clean in ("huggingface", "hf", "hugginface"):
-            pipeline.append(("huggingface", huggingface_client.call_llm))
+        elif p_clean in ("nvidia", "nvdia", "nvidia_nim", "nim"):
+            pipeline.append(("nvidia", nvidia_client.call_llm))
 
     if not pipeline:
-        # Ordre de fallback par défaut complet
+        # Ordre de fallback par défaut complet (Gemini -> OpenRouter -> NVIDIA)
         pipeline = [
-            ("groq", groq_client.call_llm),
             ("google", google_client.call_llm),
             ("openrouter", openrouter_client.call_llm),
-            ("huggingface", huggingface_client.call_llm),
+            ("nvidia", nvidia_client.call_llm),
         ]
 
     return pipeline

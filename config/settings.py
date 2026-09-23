@@ -107,31 +107,16 @@ MONGO_L2_COLLECTION = MONGO_SYNTHESES_COLLECTION
 MONGO_GLOBAL_COLLECTION = MONGO_DOMAINES_COLLECTION
 
 
-# --- LLM Providers Configuration (4 Providers) ---
+# --- LLM Providers Configuration (Cascade 3 Providers: Google -> OpenRouter -> NVIDIA) ---
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto").lower()
 LLM_COOLDOWN_HOURS = _float("LLM_COOLDOWN_HOURS", 0.0)
 LLM_PROVIDER_ORDER = [
     p.strip().lower()
-    for p in os.getenv("LLM_PROVIDER_ORDER", "groq,google,openrouter,huggingface").split(",")
+    for p in os.getenv("LLM_PROVIDER_ORDER", "google,openrouter,nvidia").split(",")
     if p.strip()
 ]
 
-# 1. Groq (Llama 3 / Mixtral ultra rapide)
-GROQ_API_KEY = (
-    os.getenv("GROQ_API_KEY")
-    or os.getenv("GROK_AI_API_KEY")
-    or os.getenv("GROQ_AI_API_KEY", "")
-).strip().strip('"').strip("'")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
-GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").strip()
-GROQ_FALLBACK_MODELS = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "mixtral-8x7b-32768",
-    "gemma2-9b-it",
-]
-
-# 2. Google AI Studio (Gemini Flash)
+# 1. Google AI Studio (Gemini Flash)
 GOOGLE_AI_API_KEY = (
     os.getenv("GOOGLE_AI_API_KEY")
     or os.getenv("GEMINI_API_KEY", "")
@@ -139,7 +124,7 @@ GOOGLE_AI_API_KEY = (
 GOOGLE_AI_BASE_URL = os.getenv("GOOGLE_AI_BASE_URL", "https://generativelanguage.googleapis.com").strip()
 GOOGLE_AI_MODEL = os.getenv("GOOGLE_AI_MODEL", "gemini-flash-lite-latest").strip()
 
-# 3. OpenRouter
+# 2. OpenRouter
 OPENROUTER_API_KEY = (
     os.getenv("OPENROUTER_API_KEY")
     or os.getenv("openRouter_API_KEY", "")
@@ -149,22 +134,27 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free").strip()
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").strip()
 OPENROUTER_FALLBACK_MODELS = ["openrouter/free"]
 
-# 4. Hugging Face Inference
-HUGGINGFACE_API_KEY = (
-    os.getenv("HUGGINGFACE_API_KEY")
-    or os.getenv("HUGGINFACE_AI_API_KEY")
-    or os.getenv("HF_TOKEN", "")
+# 3. NVIDIA NIM (DeepSeek / Llama / Nemotron)
+NVIDIA_API_KEY = (
+    os.getenv("NVIDIA_API_KEY")
+    or os.getenv("NVDIA_API_KEY")
+    or os.getenv("NVIDIA_AI_API_KEY", "")
 ).strip().strip('"').strip("'")
-HUGGINGFACE_MODEL = (
-    os.getenv("HUGGINGFACE_MODEL")
-    or os.getenv("HUGGINFACE_AI_MODEL")
-    or "Qwen/Qwen2.5-72B-Instruct"
+NVIDIA_MODEL = (
+    os.getenv("NVIDIA_MODEL")
+    or os.getenv("NVDIA_MODEL")
+    or "deepseek-ai/deepseek-v4.1-flash"
 ).strip()
-HUGGINGFACE_BASE_URL = os.getenv("HUGGINGFACE_BASE_URL", "https://router.huggingface.co/hf-inference/v1").strip()
-HUGGINGFACE_FALLBACK_MODELS = [
-    "Qwen/Qwen2.5-72B-Instruct",
-    "meta-llama/Llama-3.3-70B-Instruct",
-    "mistralai/Mistral-7B-Instruct-v0.3",
+NVIDIA_BASE_URL = (
+    os.getenv("NVIDIA_BASE_URL")
+    or os.getenv("NVDIA_BASE_URL")
+    or "https://integrate.api.nvidia.com/v1"
+).strip()
+NVIDIA_FALLBACK_MODELS = [
+    "deepseek-ai/deepseek-v4.1-flash",
+    "meta/llama-3.3-70b-instruct",
+    "mistralai/mistral-large-2-instruct",
+    "deepseek-ai/deepseek-r1",
 ]
 
 
@@ -194,24 +184,23 @@ CHECKPOINT_DIR = os.path.join(BASE_DIR, ".checkpoint")
 
 def validate():
     """Appelé au démarrage : vérifie la disponibilité d'au moins un fournisseur LLM configuré."""
-    has_groq = bool(GROQ_API_KEY)
     has_google = bool(GOOGLE_AI_API_KEY)
     has_openrouter = bool(OPENROUTER_API_KEY)
-    has_hf = bool(HUGGINGFACE_API_KEY)
+    has_nvidia = bool(NVIDIA_API_KEY)
 
     available = []
-    if has_groq: available.append("groq")
     if has_google: available.append("google")
     if has_openrouter: available.append("openrouter")
-    if has_hf: available.append("huggingface")
+    if has_nvidia: available.append("nvidia")
 
     if not available:
         raise RuntimeError(
             "Aucune clé d'API LLM configurée ! Veuillez remplir au moins une clé dans .env "
-            "(GROK_AI_API_KEY, GOOGLE_AI_API_KEY, OPENROUTER_API_KEY, ou HUGGINFACE_AI_API_KEY)."
+            "(GOOGLE_AI_API_KEY, OPENROUTER_API_KEY, ou NVIDIA_API_KEY)."
         )
 
-    if LLM_PROVIDER != "auto" and LLM_PROVIDER not in available:
+    clean_provider = LLM_PROVIDER.replace("gemini", "google").replace("nvdia", "nvidia")
+    if LLM_PROVIDER != "auto" and clean_provider not in available:
         raise RuntimeError(
             f"LLM_PROVIDER est réglé sur '{LLM_PROVIDER}', mais sa clé d'API est manquante ou vide dans .env. "
             f"Providers disponibles avec clé : {available}."

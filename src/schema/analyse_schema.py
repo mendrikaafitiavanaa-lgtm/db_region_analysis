@@ -11,12 +11,16 @@ from config import settings
 def _format_api_key_name(provider: str) -> str:
     """Retourne le nom explicite de la variable de clé API correspondante."""
     p = (provider or "").lower()
-    if p in ("groq", "grok"):
-        return "GROQ_API_KEY (ou GROK_AI_API_KEY)"
     if p in ("google", "google_aistudio", "gemini"):
         return "GOOGLE_AI_API_KEY"
-    if p == "openrouter":
+    if p in ("cerebras", "cerebras_ai"):
+        return "CEREBRAS_API_KEY"
+    if p in ("openrouter", "open_router"):
         return "OPENROUTER_API_KEY"
+    if p in ("nvidia", "nvdia", "nvidia_nim", "nim"):
+        return "NVIDIA_API_KEY (ou NVDIA_API_KEY)"
+    if p in ("groq", "grok"):
+        return "GROQ_API_KEY (ou GROK_AI_API_KEY)"
     if p in ("huggingface", "hf", "hugginface"):
         return "HUGGINGFACE_API_KEY (ou HUGGINFACE_AI_API_KEY)"
     return f"{provider.upper()}_API_KEY"
@@ -41,7 +45,7 @@ def build_stage1_document(
     territoire_val = territoire or (territoires_detectes[0] if territoires_detectes else settings.REGION)
     region_val = region or settings.REGION
     mois_val = mois or settings.MOIS_CIBLE or "general"
-    llm_name = (provider or settings.LLM_PROVIDER or "groq").lower()
+    llm_name = (provider or settings.LLM_PROVIDER or "google").lower()
 
     sources_associees = [
         {
@@ -114,7 +118,7 @@ def build_stage2_document(
     territoire_val = territoire or (territoires[0] if territoires else settings.REGION)
     region_val = region or settings.REGION
     mois_val = mois or settings.MOIS_CIBLE or "general"
-    llm_name = (provider or settings.LLM_PROVIDER or "groq").lower()
+    llm_name = (provider or settings.LLM_PROVIDER or "google").lower()
     
     all_raw_doc_ids = []
     l1_synthese_ids = []
@@ -178,7 +182,7 @@ def build_stage3_document(
     territoire_val = territoire or settings.REGION
     region_val = region or settings.REGION
     mois_val = mois or settings.MOIS_CIBLE or "general"
-    llm_name = (provider or settings.LLM_PROVIDER or "groq").lower()
+    llm_name = (provider or settings.LLM_PROVIDER or "google").lower()
     
     all_raw_doc_ids = []
     for l2 in l2_docs:
@@ -234,7 +238,7 @@ def build_stage4_document(
     territoire_val = territoire or settings.REGION
     region_val = region or settings.REGION
     mois_val = mois or settings.MOIS_CIBLE or "general"
-    llm_name = (provider or settings.LLM_PROVIDER or "groq").lower()
+    llm_name = (provider or settings.LLM_PROVIDER or "google").lower()
     
     total_sources = sum(b.get("total_documents_sources_couverts", 0) for b in domain_bilans)
     titre_default = f"Rapport Stratégique Territorial - {territoire_val} ({mois_val})"
@@ -296,7 +300,7 @@ def build_stage5_document(
     region_val = region or rapport_global.get("region") or settings.REGION
     mois_val = mois or settings.MOIS_CIBLE or rapport_global.get("mois_cible") or "general"
     total_sources = rapport_global.get("total_documents_sources_couverts", 0)
-    llm_name = (provider or settings.LLM_PROVIDER or "groq").lower()
+    llm_name = (provider or settings.LLM_PROVIDER or "google").lower()
     date_heure_str = now_utc.strftime("%Y/%m/%d %H:%M")
 
     return {
