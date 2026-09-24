@@ -61,6 +61,21 @@ def parse_stage1_response(raw_response: str) -> dict:
         if not data.get(field):
             data[field] = f"Information non consolidée pour {field}"
 
+    # documents_cites : normalise en liste d'entiers, tolère absence/format libre
+    # du LLM (ex: chaîne "1, 3" ou déjà une liste). Liste vide = LLM n'a pas cité
+    # de source précise -> signal à surveiller en aval plutôt qu'à faire planter.
+    raw_cites = data.get("documents_cites", [])
+    cites: List[int] = []
+    if isinstance(raw_cites, list):
+        for v in raw_cites:
+            try:
+                cites.append(int(v))
+            except (ValueError, TypeError):
+                continue
+    elif isinstance(raw_cites, str):
+        cites = [int(n) for n in re.findall(r"\d+", raw_cites)]
+    data["documents_cites"] = cites
+
     return data
 
 
@@ -192,4 +207,3 @@ def parse_stage5_response(raw_response: str) -> dict:
         data["plan_d_action_et_solutions_recommandees"] = [val] if isinstance(val, dict) else []
 
     return data
-

@@ -13,13 +13,27 @@ from flashtext import KeywordProcessor
 
 # Dictionnaire thématique précis pour la Corse et les collectivités territoriales
 DOMAINS_KEYWORDS = {
+    # NOTE (2026-09) : domaine recentré sur le risque "sec" (feu/sécheresse/pollution).
+    # Le mot-clé générique "eau" a été retiré : il captait aussi bien les posts sur
+    # les restrictions d'eau (sécheresse) que les crues/inondations (excès d'eau),
+    # deux problématiques opposées qui ne doivent pas être fusionnées dans le même bilan.
     "environnement_climat_risques": [
         "incendie", "incendies", "feu", "feux", "pompiers", "pompier", "sdis",
         "sécheresse", "secheresse", "canicule", "chaleur", "flamme", "flammes",
-        "forêt", "foret", "écologie", "ecologie", "pollution", "eau", "nappe",
-        "inondation", "inondations", "tempête", "tempete", "vent", "intempéries",
-        "intemperies", "biodiversité", "biodiversite", "littoral", "mer", "plage",
-        "météo", "meteo", "vigilance orange", "vigilance jaune", "crue", "crues"
+        "forêt", "foret", "écologie", "ecologie", "pollution", "qualitair",
+        "nappe phréatique", "nappe phreatique", "restriction d'eau", "restrictions d'eau",
+        "économie d'eau", "economie d'eau", "manque d'eau", "eau potable",
+        "biodiversité", "biodiversite", "sécheresse hydrologique",
+        "vigilance canicule", "particules fines"
+    ],
+    # NOUVEAU DOMAINE : phénomènes météo violents "humides" (orage, crue, vent fort),
+    # analytiquement distincts de la sécheresse/incendie ci-dessus.
+    "meteo_intemperies_crues": [
+        "orage", "orages", "intempérie", "intempéries", "intemperies",
+        "inondation", "inondations", "crue", "crues", "tempête", "tempete",
+        "vent violent", "rafale", "rafales", "vigilance orange", "vigilance jaune",
+        "vigilance rouge", "montée des eaux", "montee des eaux", "évacuation préventive",
+        "evacuation preventive", "plan communal de sauvegarde", "météo", "meteo"
     ],
     "cadre_vie_proprete_dechets": [
         "déchet", "dechets", "déchets", "ordures", "ordure", "poubelle", "poubelles",

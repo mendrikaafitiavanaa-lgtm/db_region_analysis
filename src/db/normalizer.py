@@ -151,6 +151,13 @@ def normalize_document(raw_doc: Dict[str, Any], default_source_collection: str =
     pub_date = parse_datetime_flexible(pub_date_raw)
     mois_str = pub_date.strftime("%Y-%m") if pub_date else ""
 
+    # 6. Empreinte de contenu : sert à repérer les documents quasi-identiques
+    # (ex: posts "Baromètre Citoyen" gabarités, republiés en masse avec juste
+    # un chiffre qui change). Basée sur titre + texte normalisés, indépendante
+    # du content_hash d'origine (absent ou non fiable selon la source).
+    fingerprint_src = f"{title.lower().strip()}|{raw_text.lower().strip()}"
+    content_fingerprint = hashlib.sha256(fingerprint_src.encode("utf-8")).hexdigest()
+
     return {
         "_id": raw_doc.get("_id"),
         "document_id": doc_id,
@@ -165,4 +172,53 @@ def normalize_document(raw_doc: Dict[str, Any], default_source_collection: str =
         "publication_date": pub_date,
         "mois_publication": mois_str,
         "source_collection": default_source_collection,
+        "content_fingerprint": content_fingerprint,
     }
+
+
+def deduplicate_documents(documents: list) -> list:
+    """
+    Regroupe les documents quasi-identiques (même titre+texte, ex: posts
+    "Baromètre Citoyen" gabarités republiés des centaines de fois) en un seul
+    document représentatif par empreinte de contenu.
+
+    Le document conservé porte un champ "occurrences" (nombre de doublons
+    fusionnés) et "duplicate_document_ids" (traçabilité complète des IDs
+    fusionnés), pour ne PAS perdre le signal de fréquence tout en évitant
+    d'envoyer 900 fois le même texte au LLM.
+    """
+    seen: Dict[str, Dict[str, Any]] = {}
+    order = []
+    for doc in documents:
+        fp = doc.get("content_fingerprint")
+        if not fp:
+            # Pas d'empreinte calculable (ex: dict vide) -> jamais dédupliqué
+            order.append(doc)
+            continue
+        if fp not in seen:
+            rep = dict(doc)
+            rep["occurrences"] = 1
+            rep["duplicate_document_ids"] = [doc.get("document_id")]
+            seen[fp] = rep
+            order.append(rep)
+        else:
+            seen[fp]["occurrences"] += 1
+            seen[fp]["duplicate_document_ids"].append(doc.get("document_id"))
+            # Garde la publication_date la plus récente du groupe
+            if doc.get("publication_date") and (
+                not seen[fp].get("publication_date")
+                or doc["publication_date"] > seen[fp]["publication_date"]
+            ):
+                seen[fp]["publication_date"] = doc["publication_date"]
+
+    # Annote le texte des posts dupliqués pour que le LLM voie la répétition
+    # SANS avoir à lire le même paragraphe des dizaines/centaines de fois.
+    for doc in order:
+        if doc.get("occurrences", 1) > 1:
+            doc["raw_text"] = (
+                f"{doc['raw_text']} "
+                f"[Signal répété {doc['occurrences']} fois ce mois-ci sur des "
+                f"jours/zones différents — même contenu gabarité]"
+            )
+
+    return order

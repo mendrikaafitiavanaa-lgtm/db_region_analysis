@@ -15,6 +15,7 @@ from typing import Dict, Optional, List
 from config import settings
 from src.db import source_reader, target_writer
 from src.pipeline.topic_grouper import group_documents_into_batches
+from src.db.normalizer import deduplicate_documents
 from src.llm.client import call_llm, call_llm_with_meta, get_error_class
 from src.llm.prompts.prompt_stage1 import build_stage1_messages
 from src.llm.response_parser import parse_stage1_response, ParsingError
@@ -69,9 +70,20 @@ def run_stage_1(
         logger.info("[STAGE 1] Toutes les micro-synthèses L1 sont à jour pour le périmètre demandé.")
         return {"statut": "termine", "total_lots": 0, "succes": 0, "erreurs": 0}
 
+    # 2bis. Déduplication : fusionne les posts quasi-identiques (ex: "Baromètre
+    # Citoyen" gabarité republié des centaines de fois) en 1 seul document
+    # annoté d'un compteur d'occurrences, pour ne pas noyer le LLM sous du bruit
+    # répétitif et gaspiller des tokens sur du contenu non informatif.
+    deduped_docs = deduplicate_documents(all_pending_docs)
+    if len(deduped_docs) < total_loaded:
+        logger.info(
+            f"[STAGE 1] Déduplication : {total_loaded} docs -> {len(deduped_docs)} "
+            f"documents uniques ({total_loaded - len(deduped_docs)} doublons fusionnés)."
+        )
+
     # 3. Regroupement thématique FlashText par domaine strict
     batches = group_documents_into_batches(
-        documents=all_pending_docs,
+        documents=deduped_docs,
         batch_size=settings.BATCH_SIZE,
     )
     total_lots = len(batches)

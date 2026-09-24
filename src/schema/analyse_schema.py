@@ -38,7 +38,15 @@ def build_stage1_document(
     provider: Optional[str] = None,
 ) -> dict:
     now_utc = datetime.now(timezone.utc)
-    document_ids = [str(doc.get("document_id")) for doc in source_docs if doc.get("document_id")]
+    # Inclut aussi les IDs des doublons fusionnés par deduplicate_documents()
+    # (champ "duplicate_document_ids") : la traçabilité reste complète même si
+    # un seul exemplaire du texte a été réellement envoyé au LLM.
+    document_ids = []
+    for doc in source_docs:
+        for dup_id in doc.get("duplicate_document_ids") or [doc.get("document_id")]:
+            if dup_id:
+                document_ids.append(str(dup_id))
+    document_ids = list(dict.fromkeys(document_ids))
     
     # Déduction du territoire prédominant du lot
     territoires_detectes = [doc.get("territoire") or doc.get("department") for doc in source_docs if (doc.get("territoire") or doc.get("department"))]
@@ -64,6 +72,21 @@ def build_stage1_document(
 
     date_heure_str = now_utc.strftime("%Y/%m/%d %H:%M")
 
+    # Convertit les indices [1..N] cités par le LLM (analyse["documents_cites"])
+    # en document_id réels, pour une traçabilité fait -> source exploitable par
+    # un contrôle automatique en aval (ex: détecter une "cause" non appuyée par
+    # aucun document réellement cité).
+    documents_cites_indices = analyse.get("documents_cites") or []
+    document_ids_cites = []
+    for idx in documents_cites_indices:
+        pos = idx - 1  # les documents sont numérotés à partir de [1] dans le prompt
+        if 0 <= pos < len(source_docs):
+            doc = source_docs[pos]
+            for dup_id in doc.get("duplicate_document_ids") or [doc.get("document_id")]:
+                if dup_id:
+                    document_ids_cites.append(str(dup_id))
+    document_ids_cites = list(dict.fromkeys(document_ids_cites))
+
     return {
         "type": "synthese_l1",
         "stage": 1,
@@ -74,6 +97,7 @@ def build_stage1_document(
         "domaine_principal": domaine,
         "lot_taille": len(source_docs),
         "document_ids": document_ids,
+        "document_ids_cites": document_ids_cites,
         "sources_associees": sources_associees,
         "gravite": analyse.get("gravite", "modere"),
         "resume_court": analyse.get("resume_court", ""),
@@ -121,13 +145,16 @@ def build_stage2_document(
     llm_name = (provider or settings.LLM_PROVIDER or "google").lower()
     
     all_raw_doc_ids = []
+    all_cited_doc_ids = []
     l1_synthese_ids = []
     for l1 in l1_docs:
         if l1.get("_id"):
             l1_synthese_ids.append(str(l1.get("_id")))
         all_raw_doc_ids.extend(l1.get("document_ids", []))
+        all_cited_doc_ids.extend(l1.get("document_ids_cites", []))
     
     all_raw_doc_ids = list(dict.fromkeys(all_raw_doc_ids))
+    all_cited_doc_ids = list(dict.fromkeys(all_cited_doc_ids))
     date_heure_str = now_utc.strftime("%Y/%m/%d %H:%M")
 
     return {
@@ -142,6 +169,7 @@ def build_stage2_document(
         "total_documents_sources_couverts": len(all_raw_doc_ids),
         "l1_synthese_ids": l1_synthese_ids,
         "document_ids_sources": all_raw_doc_ids,
+        "document_ids_cites": all_cited_doc_ids,
         "gravite": analyse.get("gravite", "modere"),
         "resume_consolide": analyse.get("resume_consolide", ""),
         "tendance_majeure": analyse.get("tendance_majeure", ""),
@@ -185,9 +213,12 @@ def build_stage3_document(
     llm_name = (provider or settings.LLM_PROVIDER or "google").lower()
     
     all_raw_doc_ids = []
+    all_cited_doc_ids = []
     for l2 in l2_docs:
         all_raw_doc_ids.extend(l2.get("document_ids_sources", []))
+        all_cited_doc_ids.extend(l2.get("document_ids_cites", []))
     all_raw_doc_ids = list(dict.fromkeys(all_raw_doc_ids))
+    all_cited_doc_ids = list(dict.fromkeys(all_cited_doc_ids))
     date_heure_str = now_utc.strftime("%Y/%m/%d %H:%M")
 
     return {
@@ -200,6 +231,7 @@ def build_stage3_document(
         "total_syntheses_l2_utilisees": len(l2_docs),
         "total_documents_sources_couverts": len(all_raw_doc_ids),
         "document_ids_sources": all_raw_doc_ids,
+        "document_ids_cites": all_cited_doc_ids,
         "gravite_globale": analyse.get("gravite_globale", "modere"),
         "bilan_executif": analyse.get("bilan_executif", ""),
         "cause": analyse.get("cause", ""),

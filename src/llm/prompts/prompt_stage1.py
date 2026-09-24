@@ -33,8 +33,15 @@ def build_stage1_messages(documents: List[Dict], domaine: str) -> list:
     docs_block = "\n\n".join(items)
     user_content = (
         f"THÉMATIQUE EXCLUSIVE : {domaine.upper()}\n"
-        f"Voici {len(documents)} faits bruts collectés sur ce domaine :\n\n"
+        f"Voici {len(documents)} faits bruts collectés sur ce domaine, numérotés [1] à [{len(documents)}] :\n\n"
         f"{docs_block}\n\n"
+        f"IMPORTANT : chaque document numéroté ci-dessus peut décrire un événement DIFFÉRENT "
+        f"(dates différentes, lieux différents, causes différentes), même s'ils partagent le même "
+        f"domaine thématique. Ne fusionne JAMAIS deux faits qui n'apparaissent pas dans le MÊME "
+        f"document numéroté (ex: n'attribue pas une évacuation due à un orage [doc X] à un incendie "
+        f"décrit dans un autre document [doc Y]).\n\n"
+        f"Pour le champ \"documents_cites\", indique la liste des numéros [1..{len(documents)}] "
+        f"des documents qui appuient réellement ta \"cause\" et ta \"preuve\".\n\n"
         f"Produis la micro-synthèse d'analyse au format JSON strict suivant :\n{json_shape}"
     )
     return [

@@ -20,6 +20,7 @@ CHAMPS ATTENDUS :
 - consequence_potentielle : Impact prévisible
 - besoins_reels_detectes : Besoins exprimés sur le terrain
 - solutions_recommandees : Actions recommandées
+- documents_cites : Liste des numéros [1..N] des documents source qui appuient réellement "cause" et "preuve" (obligatoire, sert à la vérification automatique)
 -->
 
 ```json
@@ -31,7 +32,8 @@ CHAMPS ATTENDUS :
   "preuve": "Éléments probants, chiffres concrets, faits tangibles ou constats rapportés par les sources attestant de la situation.",
   "consequence_potentielle": "Risque direct pour la population, les services publics ou l'écosystème.",
   "besoins_reels_detectes": "Besoins prioritaires constatés sur le terrain.",
-  "solutions_recommandees": "Actions concrètes préconisées à court/moyen terme adaptées à la situation."
+  "solutions_recommandees": "Actions concrètes préconisées à court/moyen terme adaptées à la situation.",
+  "documents_cites": [1, 3]
 }
 ```
 
