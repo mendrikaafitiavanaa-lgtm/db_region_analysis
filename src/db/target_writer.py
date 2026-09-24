@@ -27,7 +27,7 @@ def _ensure_meta_fields(doc: Dict[str, Any]) -> Dict[str, Any]:
         doc["mois_cible"] = settings.MOIS_CIBLE or "general"
         
     if "source_territoire" not in doc or not doc["source_territoire"]:
-        doc["source_territoire"] = doc.get("department") or doc.get("region") or settings.REGION
+        doc["source_territoire"] = doc.get("department") or doc.get("region") or getattr(settings, "REGION", "Corse") or "Corse"
         
     return doc
 

@@ -1,9 +1,9 @@
 """
 Config centralisée pour le pipeline d'analyse territoriale Corse.
 Supporte :
-- 4 collections sources hétérogènes (Corse-du-Sud, Haute-Corse, Region-Corse, Corse)
+- 2 collections sources départementales (Corse-du-Sud, Haute-Corse)
 - 3 collections cibles unifiées (Syntheses, Domaines, Finale)
-- 4 fournisseurs LLM gratuits (Groq, Google Gemini, OpenRouter, Hugging Face)
+- 3 fournisseurs LLM en cascade (Google Gemini, OpenRouter, NVIDIA NIM)
 """
 import os
 from typing import List, Dict
@@ -56,11 +56,11 @@ MONGO_URI = (
 ).strip()
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "France-Corse").strip()
 
-# --- 4 Collections Sources Hétérogènes ---
+# --- Collections Sources Départementales (2 départements : Corse-du-Sud, Haute-Corse) ---
 MONGO_SOURCE_COLLECTION_A = os.getenv("MONGO_SOURCE_COLLECTION_A", "Corse-du-Sud").strip()
 MONGO_SOURCE_COLLECTION_B = os.getenv("MONGO_SOURCE_COLLECTION_B", "Haute-Corse").strip()
-MONGO_SOURCE_COLLECTION_C = os.getenv("MONGO_SOURCE_COLLECTION_C", "Region-Corse").strip()
-MONGO_SOURCE_COLLECTION_D = os.getenv("MONGO_SOURCE_COLLECTION_D", "Corse").strip()
+MONGO_SOURCE_COLLECTION_C = os.getenv("MONGO_SOURCE_COLLECTION_C", "").strip()
+MONGO_SOURCE_COLLECTION_D = os.getenv("MONGO_SOURCE_COLLECTION_D", "").strip()
 
 # Compatibilité et registre des sources
 MONGO_SOURCE_COLLECTION = os.getenv("MONGO_SOURCE_COLLECTION", MONGO_SOURCE_COLLECTION_A).strip().lstrip("=")

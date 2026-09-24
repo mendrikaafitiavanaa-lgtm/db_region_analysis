@@ -56,7 +56,11 @@ def run_stage_5(run_id: Optional[str] = None, territoire: Optional[str] = None) 
 
     start_time = time.time()
     mois_label = settings.MOIS_CIBLE or rapport_global.get("mois_cible") or "2026-08"
-    territoire_label = territoire or rapport_global.get("source_territoire") or settings.REGION or "Corse"
+    territoire_label = (
+        territoire
+        if (territoire and territoire.lower() != "all")
+        else (rapport_global.get("source_territoire") or "Corse")
+    )
 
     try:
         messages = build_stage5_messages(
@@ -72,7 +76,7 @@ def run_stage_5(run_id: Optional[str] = None, territoire: Optional[str] = None) 
             rapport_global=rapport_global,
             analyse=analyse,
             mois=mois_label,
-            region=settings.REGION,
+            region=rapport_global.get("region") or (territoire if (territoire and territoire.lower() != "all") else "Corse"),
             territoire=territoire_label,
             run_id=run_id,
             provider=used_provider,

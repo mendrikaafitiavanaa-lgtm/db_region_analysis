@@ -210,6 +210,44 @@ class TestPipelineOrchestrator(unittest.TestCase):
         self.assertEqual(saved_l5["cause"], "Non-remplacement départs retraite")
         self.assertEqual(saved_l5["preuve"], "3 hôpitaux en grève et 40% postes vacants")
 
+    def test_territory_deduction_haute_corse(self):
+        from src.schema.analyse_schema import (
+            build_stage1_document,
+            build_stage2_document,
+            build_stage3_document,
+            build_stage4_document,
+            build_stage5_document,
+        )
+        # Stage 1 avec docs de Haute-Corse
+        source_docs = [
+            {"document_id": "hc_1", "title": "Feu Cagnano", "department": "Haute-Corse", "region": "Corse"},
+            {"document_id": "hc_2", "title": "Crues Restonica", "department": "Haute-Corse", "region": "Corse"},
+        ]
+        doc_l1 = build_stage1_document(source_docs=source_docs, analyse={"cause": "Sécheresse"}, domaine="environnement")
+        self.assertEqual(doc_l1["source_territoire"], "Haute-Corse")
+        self.assertEqual(doc_l1["department"], "Haute-Corse")
+        self.assertEqual(doc_l1["region"], "Corse")
+
+        # Stage 2
+        doc_l2 = build_stage2_document(l1_docs=[doc_l1], analyse={"cause": "Climat"}, domaine="environnement")
+        self.assertEqual(doc_l2["source_territoire"], "Haute-Corse")
+        self.assertEqual(doc_l2["region"], "Corse")
+
+        # Stage 3
+        doc_l3 = build_stage3_document(l2_docs=[doc_l2], analyse={"cause": "Stress hydrique"}, domaine="environnement")
+        self.assertEqual(doc_l3["source_territoire"], "Haute-Corse")
+        self.assertEqual(doc_l3["region"], "Corse")
+
+        # Stage 4
+        doc_l4 = build_stage4_document(domain_bilans=[doc_l3], analyse={"titre": "Bilan Haute-Corse"})
+        self.assertEqual(doc_l4["source_territoire"], "Haute-Corse")
+        self.assertEqual(doc_l4["region"], "Corse")
+
+        # Stage 5
+        doc_l5 = build_stage5_document(rapport_global=doc_l4, analyse={"probleme_majeur_persistant": "Feux"})
+        self.assertEqual(doc_l5["source_territoire"], "Haute-Corse")
+        self.assertEqual(doc_l5["region"], "Corse")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -44,7 +44,14 @@ def run_stage_4(run_id: Optional[str] = None, territoire: Optional[str] = None) 
 
     start_time = time.time()
     mois_label = settings.MOIS_CIBLE or "2026-08"
-    territoire_label = territoire or settings.REGION or "Corse"
+    territoires_detectes = [b.get("source_territoire") or b.get("department") for b in domain_bilans if (b.get("source_territoire") or b.get("department"))]
+    unique_terr = list(dict.fromkeys(territoires_detectes))
+    if territoire and territoire.lower() != "all":
+        territoire_label = territoire
+    elif len(unique_terr) == 1:
+        territoire_label = unique_terr[0]
+    else:
+        territoire_label = "Corse"
 
     try:
         messages = build_stage4_messages(domain_bilans, mois=mois_label, region=territoire_label)
@@ -55,7 +62,7 @@ def run_stage_4(run_id: Optional[str] = None, territoire: Optional[str] = None) 
             domain_bilans=domain_bilans,
             analyse=analyse,
             mois=mois_label,
-            region=settings.REGION,
+            region=territoire if (territoire and territoire.lower() != "all") else "",
             territoire=territoire_label,
             run_id=run_id,
             provider=used_provider,

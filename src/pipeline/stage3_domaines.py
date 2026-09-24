@@ -78,8 +78,8 @@ def run_stage_3(run_id: Optional[str] = None, territoire: Optional[str] = None) 
                 analyse=analyse,
                 domaine=domaine,
                 mois=settings.MOIS_CIBLE,
-                region=settings.REGION,
-                territoire=territoire or settings.REGION,
+                region=territoire if (territoire and territoire.lower() != "all") else "",
+                territoire=territoire if (territoire and territoire.lower() != "all") else "",
                 run_id=run_id,
                 provider=used_provider,
             )

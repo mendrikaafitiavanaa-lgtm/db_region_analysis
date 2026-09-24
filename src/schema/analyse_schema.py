@@ -48,10 +48,29 @@ def build_stage1_document(
                 document_ids.append(str(dup_id))
     document_ids = list(dict.fromkeys(document_ids))
     
-    # Déduction du territoire prédominant du lot
+    # Déduction dynamique du territoire et de la région prédominants du lot
     territoires_detectes = [doc.get("territoire") or doc.get("department") for doc in source_docs if (doc.get("territoire") or doc.get("department"))]
-    territoire_val = territoire or (territoires_detectes[0] if territoires_detectes else settings.REGION)
-    region_val = region or settings.REGION
+    unique_territoires = list(dict.fromkeys(territoires_detectes))
+    if territoire and territoire.lower() != "all":
+        territoire_val = territoire
+    elif len(unique_territoires) == 1:
+        territoire_val = unique_territoires[0]
+    elif len(unique_territoires) > 1:
+        territoire_val = "Corse"
+    else:
+        territoire_val = getattr(settings, "REGION", "Corse") or "Corse"
+
+    regions_detectees = [doc.get("region") for doc in source_docs if doc.get("region")]
+    unique_regions = list(dict.fromkeys(regions_detectees))
+    if region and region.lower() != "all":
+        region_val = region
+    elif len(unique_regions) == 1:
+        region_val = unique_regions[0]
+    elif len(unique_regions) > 1:
+        region_val = "Corse"
+    else:
+        region_val = getattr(settings, "REGION", "Corse") or "Corse"
+
     mois_val = mois or settings.MOIS_CIBLE or "general"
     llm_name = (provider or settings.LLM_PROVIDER or "google").lower()
 
@@ -61,8 +80,8 @@ def build_stage1_document(
             "title": doc.get("title"),
             "url": doc.get("url"),
             "municipality": doc.get("municipality"),
-            "department": doc.get("department"),
-            "territoire": doc.get("territoire") or doc.get("department"),
+            "department": doc.get("department") or territoire_val,
+            "territoire": doc.get("territoire") or doc.get("department") or territoire_val,
             "region": doc.get("region") or region_val,
             "source_name": doc.get("source_name"),
             "publication_date": doc.get("publication_date"),
@@ -139,8 +158,27 @@ def build_stage2_document(
 ) -> dict:
     now_utc = datetime.now(timezone.utc)
     territoires = [l1.get("source_territoire") or l1.get("department") for l1 in l1_docs if (l1.get("source_territoire") or l1.get("department"))]
-    territoire_val = territoire or (territoires[0] if territoires else settings.REGION)
-    region_val = region or settings.REGION
+    unique_territoires = list(dict.fromkeys(territoires))
+    if territoire and territoire.lower() != "all":
+        territoire_val = territoire
+    elif len(unique_territoires) == 1:
+        territoire_val = unique_territoires[0]
+    elif len(unique_territoires) > 1:
+        territoire_val = "Corse"
+    else:
+        territoire_val = getattr(settings, "REGION", "Corse") or "Corse"
+
+    regions = [l1.get("region") for l1 in l1_docs if l1.get("region")]
+    unique_regions = list(dict.fromkeys(regions))
+    if region and region.lower() != "all":
+        region_val = region
+    elif len(unique_regions) == 1:
+        region_val = unique_regions[0]
+    elif len(unique_regions) > 1:
+        region_val = "Corse"
+    else:
+        region_val = getattr(settings, "REGION", "Corse") or "Corse"
+
     mois_val = mois or settings.MOIS_CIBLE or "general"
     llm_name = (provider or settings.LLM_PROVIDER or "google").lower()
     
@@ -207,8 +245,28 @@ def build_stage3_document(
     provider: Optional[str] = None,
 ) -> dict:
     now_utc = datetime.now(timezone.utc)
-    territoire_val = territoire or settings.REGION
-    region_val = region or settings.REGION
+    territoires_detectes = [l2.get("source_territoire") or l2.get("department") for l2 in l2_docs if (l2.get("source_territoire") or l2.get("department"))]
+    unique_territoires = list(dict.fromkeys(territoires_detectes))
+    if territoire and territoire.lower() != "all":
+        territoire_val = territoire
+    elif len(unique_territoires) == 1:
+        territoire_val = unique_territoires[0]
+    elif len(unique_territoires) > 1:
+        territoire_val = "Corse"
+    else:
+        territoire_val = getattr(settings, "REGION", "Corse") or "Corse"
+
+    regions_detectees = [l2.get("region") for l2 in l2_docs if l2.get("region")]
+    unique_regions = list(dict.fromkeys(regions_detectees))
+    if region and region.lower() != "all":
+        region_val = region
+    elif len(unique_regions) == 1:
+        region_val = unique_regions[0]
+    elif len(unique_regions) > 1:
+        region_val = "Corse"
+    else:
+        region_val = getattr(settings, "REGION", "Corse") or "Corse"
+
     mois_val = mois or settings.MOIS_CIBLE or "general"
     llm_name = (provider or settings.LLM_PROVIDER or "google").lower()
     
@@ -267,8 +325,28 @@ def build_stage4_document(
     provider: Optional[str] = None,
 ) -> dict:
     now_utc = datetime.now(timezone.utc)
-    territoire_val = territoire or settings.REGION
-    region_val = region or settings.REGION
+    territoires_detectes = [b.get("source_territoire") or b.get("department") for b in domain_bilans if (b.get("source_territoire") or b.get("department"))]
+    unique_territoires = list(dict.fromkeys(territoires_detectes))
+    if territoire and territoire.lower() != "all":
+        territoire_val = territoire
+    elif len(unique_territoires) == 1:
+        territoire_val = unique_territoires[0]
+    elif len(unique_territoires) > 1:
+        territoire_val = "Corse"
+    else:
+        territoire_val = getattr(settings, "REGION", "Corse") or "Corse"
+
+    regions_detectees = [b.get("region") for b in domain_bilans if b.get("region")]
+    unique_regions = list(dict.fromkeys(regions_detectees))
+    if region and region.lower() != "all":
+        region_val = region
+    elif len(unique_regions) == 1:
+        region_val = unique_regions[0]
+    elif len(unique_regions) > 1:
+        region_val = "Corse"
+    else:
+        region_val = getattr(settings, "REGION", "Corse") or "Corse"
+
     mois_val = mois or settings.MOIS_CIBLE or "general"
     llm_name = (provider or settings.LLM_PROVIDER or "google").lower()
     
@@ -328,8 +406,16 @@ def build_stage5_document(
     provider: Optional[str] = None,
 ) -> dict:
     now_utc = datetime.now(timezone.utc)
-    territoire_val = territoire or rapport_global.get("source_territoire") or settings.REGION
-    region_val = region or rapport_global.get("region") or settings.REGION
+    territoire_val = (
+        territoire
+        if (territoire and territoire.lower() != "all")
+        else (rapport_global.get("source_territoire") or getattr(settings, "REGION", "Corse") or "Corse")
+    )
+    region_val = (
+        region
+        if (region and region.lower() != "all")
+        else (rapport_global.get("region") or getattr(settings, "REGION", "Corse") or "Corse")
+    )
     mois_val = mois or settings.MOIS_CIBLE or rapport_global.get("mois_cible") or "general"
     total_sources = rapport_global.get("total_documents_sources_couverts", 0)
     llm_name = (provider or settings.LLM_PROVIDER or "google").lower()
